@@ -1,7 +1,7 @@
 #!/bin/sh
-# Verification pass for YOLOv8 Detector on an ARTPEC-8 camera.
+# Verification pass for the YOLOv8 Detector ACAP on an ARTPEC camera.
 #
-#   CAM=<camera-ip> AUTH=<user>:<password> sh verify/verify-0.9.3.sh
+#   CAM=<camera-ip> AUTH=<user>:<password> sh verify/verify.sh
 #
 # Checks the things that cannot be checked off the camera: that live.json is
 # only written while the settings page is watching, that the app is quiet at
