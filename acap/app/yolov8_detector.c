@@ -417,7 +417,10 @@ static void determine_bbox_coordinates(const uint8_t* boxes,
     find_corners(x, y, w, h, x1, y1, x2, y2);
 }
 
-// Fraction of the frame a detection's clamped box covers, 0..1.
+// Fraction of the frame a detection's clamped box covers. Negative when the box
+// lies wholly outside the frame: cx can reach 657 px on a 640 px input, and
+// find_corners then clamps x1 above x2. Callers must treat <= 0 as "reject",
+// not as "small".
 static float box_area_fraction(const uint8_t* boxes, int i, const model_params_t* mp) {
     float x1, y1, x2, y2;
     determine_bbox_coordinates(boxes, i, mp, &x1, &y1, &x2, &y2);
@@ -553,7 +556,10 @@ static void filter_detections(const decode_job_t* job, const model_params_t* mp)
         }
         // Reject frame-sized boxes: YOLOv8n fires a stable full-frame anchor on close,
         // cluttered scenes that NMS cannot suppress (its IoU with the real boxes is low).
-        invalid_detections[i] = (box_area_fraction(job->boxes, i, mp) > job->max_area) ? 1 : 0;
+        // Reject empty and off-frame ones too -- a negative area is not a small area,
+        // and an inverted rectangle is not something to hand to the box drawer.
+        const float area = box_area_fraction(job->boxes, i, mp);
+        invalid_detections[i] = (area <= 0.0f || area > job->max_area) ? 1 : 0;
     }
 
     non_maximum_suppression(job->boxes,

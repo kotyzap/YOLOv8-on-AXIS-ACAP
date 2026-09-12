@@ -19,6 +19,13 @@
 > the new 300-candidate NMS cap.
 >
 > The original review follows, unchanged, as the record of why each change exists.
+>
+> **Found while implementing (not in the original review), fixed in 0.9.3.** A box whose centre
+> falls outside the frame — `cx` reaches 657 px on a 640 px input — clamps to `x1 > x2`, so
+> `box_area_fraction` returns a *negative* number. That passed the `> max_area` test, survived
+> filtering, and reached `bbox_rectangle` as an inverted rectangle. Present in 0.9.1 too. The
+> area check now rejects anything `<= 0` as well. Caught by a ThreadSanitizer harness built
+> around the shipped pipeline code, which validates every published box.
 
 ---
 
