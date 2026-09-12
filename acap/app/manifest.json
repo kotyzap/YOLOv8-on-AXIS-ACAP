@@ -27,8 +27,8 @@
             "vendorId": "19f191bb41",
             "runOptions": "/usr/local/packages/yolov8_detector/model/model.tflite /usr/local/packages/yolov8_detector/label/labels.txt -c axis-a8-dlpu-tflite",
             "vendorUrl": "https://www.4xs.dev",
-            "runMode": "never",
-            "version": "0.9.3",
+            "runMode": "respawn",
+            "version": "0.9.4",
             "compatibleOsVersions": [
                 {
                     "max": "13"

@@ -53,14 +53,18 @@ The event is stateless, on
 ## Build and deploy
 
 ```sh
-sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_2_aarch64.eap
-curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_2_aarch64.eap" \
+sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_4_aarch64.eap
+curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" \
   "http://CAMERA/axis-cgi/applications/upload.cgi"
 curl --digest -u root:PASS "http://CAMERA/axis-cgi/applications/control.cgi?action=start&package=yolov8_detector"
 ```
 
-`runMode` is `never`, so the app is started explicitly — including after a camera reboot. If you
-want it to come back on its own, change that to `respawn` in `acap/app/manifest.json`.
+`runMode` is `respawn`, so the app starts on its own and comes back after a camera reboot.
+
+Two consequences. It will try to start even when AXIS Object Analytics holds the DLPU, and fail;
+`panic()` sleeps 5 s before exiting so that becomes a slow retry rather than a crash loop filling
+the system log, but the fix is still to stop AOA. And stopping the app from the Apps page is what
+keeps it stopped — it will not stay down just because it exited.
 
 ## Layout
 

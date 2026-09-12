@@ -20,6 +20,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <unistd.h>
+
+// runMode is "respawn", so ACAP restarts the app as soon as it exits. A fatal
+// condition that persists -- most likely AXIS Object Analytics holding the
+// DLPU -- would otherwise become a tight crash loop that fills the system log.
+// Back off first so the retry is once every few seconds, not continuous.
+#define PANIC_BACKOFF_SECONDS 5
 
 // Function definition for panic
 __attribute__((noreturn)) __attribute__((format(printf, 1, 2))) void panic(const char* format,
@@ -28,5 +35,6 @@ __attribute__((noreturn)) __attribute__((format(printf, 1, 2))) void panic(const
     va_start(arg, format);
     vsyslog(LOG_ERR, format, arg);
     va_end(arg);
+    sleep(PANIC_BACKOFF_SECONDS);
     exit(1);
 }
