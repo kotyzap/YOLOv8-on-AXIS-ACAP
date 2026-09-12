@@ -70,6 +70,9 @@ range 0..1. Per-tensor int8 quantization picks **one scale for both**, around 2.
 score below ~1.27 rounds to zero, and the exported model detects nothing at all — silently, with
 no error anywhere.
 
+<img width="2816" height="1536" alt="Gemini_Generated_Image_wy4ahfwy4ahfwy4a" src="https://github.com/user-attachments/assets/1f49b578-2c43-40d6-9c37-8d64f204647b" />
+
+
 The fix is to cut the graph before the final `Concat` so boxes and scores become two tensors with
 their own scales:
 
