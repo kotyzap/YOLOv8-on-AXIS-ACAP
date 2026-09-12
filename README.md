@@ -34,11 +34,17 @@ effect on the next frame — no restart, no model reload.
 | `EventsEnabled` | yes | publish detections as a camera event |
 | `EventMinDurationMs` | 1000 | how long a class must be present before it is reported |
 | `EventCooldownMs` | 30000 | minimum gap between two events for the same class |
-| `LiveView` | no | set by the settings page while it is open; gates `live.json` |
+| `LiveView` | 0 | nonce written by the settings page while it is open; gates `live.json` |
 
 `ConfThresholdPercent` has a floor of 1 % and NMS never compares more than 300 boxes, because at
 a zero threshold every one of the 8400 anchors survives and the O(n²) suppression would stall
 the app.
+
+`LiveView` gates the `live.json` the settings page polls, so nothing is written to flash for a
+page nobody has open. The page writes a fresh number every 30 s while it is visible and 0 when
+it is hidden; the app arms for 60 s on any change. It is a changing number rather than a
+yes/no because re-writing a parameter with the value it already holds may not raise a change
+callback, which would let the window expire under an open page.
 
 The event is stateless, on
 `tnsaxis:CameraApplicationPlatform/tnsaxis:YOLOv8Detector/tnsaxis:Detection`, carrying `class`

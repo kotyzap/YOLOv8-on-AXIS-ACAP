@@ -297,11 +297,15 @@ static void on_parameter_changed(const gchar* name, const gchar* value, gpointer
     } else if (g_str_has_suffix(name, "EventCooldownMs")) {
         event_sender_set_timing(st->event_sender, -1, number);
     } else if (g_str_has_suffix(name, "LiveView")) {
-        // The settings page arms this while it is open and visible, and disarms
-        // it when hidden. Without it the app writes nothing to flash.
-        st->live_until_us = (g_ascii_strcasecmp(value, "yes") == 0)
-                                ? g_get_monotonic_time() + (gint64)LIVE_ARM_MS * 1000
-                                : 0;
+        // The settings page arms this while it is open and visible, and writes 0
+        // when hidden. Without it the app writes nothing to flash.
+        //
+        // It carries a nonce rather than a yes/no because the page has to re-arm
+        // on a timer, and a parameter set to the value it already holds may not
+        // produce a change callback at all -- in which case the window would
+        // expire under an open page. A value that differs every time cannot.
+        st->live_until_us =
+            (number != 0) ? g_get_monotonic_time() + (gint64)LIVE_ARM_MS * 1000 : 0;
     } else if (g_str_has_suffix(name, "Classes")) {
         build_class_mask(value, st->labels, st->num_labels, st->class_allowed, st->num_classes);
     } else {

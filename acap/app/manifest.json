@@ -70,8 +70,8 @@
                 },
                 {
                     "name": "LiveView",
-                    "default": "no",
-                    "type": "bool:no,yes"
+                    "default": "0",
+                    "type": "int:maxlen=10;min=0;max=2000000000"
                 },
                 {
                     "name": "EventCooldownMs",
