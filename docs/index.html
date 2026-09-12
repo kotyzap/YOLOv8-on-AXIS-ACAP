@@ -191,7 +191,7 @@ footer p{margin:0 0 12px;max-width:none}
         <div class="step"><span class="i">1</span><div><div class="t">Sensor frame</div><div class="d">16:9 live stream</div></div></div>
         <div class="step hi"><span class="i">2</span><div><div class="t">YOLOv8n on the DLPU</div><div class="d">larod · quantized uint8 · DFL head included</div></div></div>
         <div class="step"><span class="i">3</span><div><div class="t">Decode + NMS on the CPU</div><div class="d">worker thread · 5040 anchors × 80 classes</div></div></div>
-        <div class="step"><span class="i">4</span><div><div class="t">Boxes on the live stream</div><div class="d">overlay · one frame of lag</div></div></div>
+        <div class="step"><span class="i">4</span><div><div class="t">Boxes on the live stream</div><div class="d">coloured by class · one frame of lag</div></div></div>
         <div class="step"><span class="i">5</span><div><div class="t">Native Axis event</div><div class="d">any VMS can subscribe</div></div></div>
       </div>
     </div>
@@ -331,8 +331,38 @@ footer p{margin:0 0 12px;max-width:none}
       per-frame. No line crossing, no time-in-area, no object identity across frames.</li>
       <li><strong>The current model's speed is unmeasured.</strong> Only the 640×640 model has been
       timed on hardware. The 384×640 one should be faster; that is a prediction.</li>
+      <li><strong>Rotation 0 and 180 only.</strong> Tested at 90: the stream becomes portrait,
+      larod squashes it into the landscape model input, and a standing person arrives as a smear.
+      One frame found nothing; the next called a person an airplane at 26 %. The app warns. The
+      fix is a portrait export, not a coordinate change.</li>
       <li><strong>Tested on exactly one camera</strong> — an AXIS Q1656 on AXIS OS 12.11.</li>
     </ul>
+  </section>
+
+  <section>
+    <p class="lbl">06b / On one view</p>
+    <div class="cols">
+      <div>
+        <h2>Detect on a view area, not just the whole sensor.</h2>
+        <p>A view area is a crop of the sensor, and the detector can run on one: a gate or a
+        doorway fills the model input instead of occupying a tenth of it. The same number selects
+        the frames and the surface the boxes are drawn on, so the picture and the detections
+        cannot describe different crops.</p>
+        <p>AXIS Object Analytics always runs on the full view of the first sensor. This is one of
+        the few places where a prototype can do something the built-in analytics does not.</p>
+        <p>Verified on a Q1656 with two view areas configured. A view the camera does not have
+        falls back to the full view with a warning rather than exiting.</p>
+      </div>
+      <div>
+        <h2>Colour says what a box is.</h2>
+        <p>The camera's box drawer renders rectangles and no text, so colour carries the class:
+        people green, vehicles blue, animals purple, everything else amber — the same four in the
+        settings page's class list and confidence bars, so a box on the video and a row in the
+        list are tied together. One flat colour is a setting for anyone who prefers it.</p>
+        <p>Labels on the boxes would need a Cairo render per frame. Not built: the colours carry
+        most of the information for a fraction of the cost.</p>
+      </div>
+    </div>
   </section>
 
   <section>
@@ -344,7 +374,7 @@ footer p{margin:0 0 12px;max-width:none}
 cd YOLOv8-on-AXIS-ACAP
 sh acap/build.sh
 
-curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_5_aarch64.eap" \
+curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_10_14_aarch64.eap" \
   "http://CAMERA/axis-cgi/applications/upload.cgi"</code></pre>
     <p>Re-export the model — different input size, different calibration set, your own weights —
     with <code>sh tools/export_yolov8.sh</code>. The build refuses to run if the committed
