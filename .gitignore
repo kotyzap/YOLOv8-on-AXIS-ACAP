@@ -12,3 +12,6 @@ tf_split/
 yolov8n.pt
 
 .DS_Store
+
+# Long-form write-up, still describing 0.9.1 — not part of the public repo
+marketing.md

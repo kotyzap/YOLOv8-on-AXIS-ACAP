@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YOLOv8 on AXIS — ARTPEC-8 ACAP prototype</title>
+<meta name="description" content="Stock COCO YOLOv8n running on an AXIS camera's own DLPU. 80 classes, no server, no cloud. A weekend prototype by Pavel Kotyza / 4xs.dev.">
+<meta property="og:title" content="YOLOv8 on AXIS — ARTPEC-8 ACAP prototype">
+<meta property="og:description" content="Stock COCO YOLOv8n on the camera's own DLPU. 80 classes, no server, no cloud.">
+<meta property="og:image" content="hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{
+  --bg:#ffffff; --bg-alt:#f6f8fa; --fg:#1f2328; --fg-dim:#59636e;
+  --line:#d1d9e0; --accent:#1a7f37; --accent-fg:#ffffff;
+  --warn-bg:#fff8c5; --warn-line:#d4a72c; --warn-fg:#4d3800;
+  --code-bg:#f6f8fa; --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --bg-alt:#151b23; --fg:#e6edf3; --fg-dim:#9198a1;
+  --line:#3d444d; --accent:#c9f31d; --accent-fg:#0d1117;
+  --warn-bg:#272115; --warn-line:#9e6a03; --warn-fg:#f0d58c;
+  --code-bg:#151b23;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+  font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding-inline:20px}
+a{color:inherit;text-decoration:underline;text-underline-offset:3px;
+  text-decoration-color:var(--line)}
+a:hover{text-decoration-color:currentColor}
+
+header{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+.hdr{display:flex;align-items:center;gap:16px;padding-block:14px}
+.brand{font-family:var(--mono);font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--fg-dim);text-decoration:none;white-space:nowrap}
+.brand b{color:var(--fg)}
+.hdr .sp{flex:1}
+.btn{font:inherit;font-size:13px;padding:5px 11px;border:1px solid var(--line);
+  border-radius:6px;background:var(--bg-alt);color:var(--fg);cursor:pointer;
+  text-decoration:none;white-space:nowrap}
+.btn:hover{border-color:var(--fg-dim)}
+
+.hero{margin-block:28px 0}
+.hero img{width:100%;height:auto;display:block;border-radius:10px;border:1px solid var(--line)}
+.figcap{font-size:13px;color:var(--fg-dim);margin-top:8px;font-style:italic}
+
+h1{font-size:clamp(30px,6vw,44px);line-height:1.15;letter-spacing:-.02em;margin:28px 0 10px}
+.lede{font-size:clamp(18px,2.6vw,21px);color:var(--fg-dim);margin:0 0 20px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}
+.badge{font-family:var(--mono);font-size:12px;letter-spacing:.06em;padding:4px 10px;
+  border-radius:999px;border:1px solid var(--line);color:var(--fg-dim);white-space:nowrap}
+.badge.proto{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:700}
+
+section{padding-block:34px;border-top:1px solid var(--line)}
+h2{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--fg-dim);margin:0 0 14px;font-weight:600}
+h2 b{color:var(--fg)}
+h3{font-size:19px;margin:26px 0 8px;letter-spacing:-.01em}
+p{margin:0 0 16px}
+ul{margin:0 0 16px;padding-left:22px}
+li{margin-bottom:10px}
+code{font-family:var(--mono);font-size:.88em;background:var(--code-bg);
+  padding:2px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:8px;
+  padding:14px 16px;overflow-x:auto;margin:0 0 16px}
+pre code{background:none;border:0;padding:0;font-size:13.5px;line-height:1.55}
+
+.tablewrap{overflow-x:auto;margin:0 0 16px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--fg-dim);font-weight:600;white-space:nowrap}
+td.num{font-family:var(--mono);white-space:nowrap}
+tr.win td{font-weight:700}
+caption{caption-side:top;text-align:left;font-size:14px;color:var(--fg-dim);
+  padding-bottom:8px;font-weight:600}
+
+.note{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-fg);
+  border-radius:8px;padding:14px 16px;margin:0 0 16px;font-size:15.5px}
+.note strong{color:inherit}
+
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 16px;font-size:15px;
+  border-top:1px solid var(--line)}
+.kv>div{padding:9px 0;border-bottom:1px solid var(--line)}
+.kv .v{font-family:var(--mono);text-align:right;white-space:nowrap}
+
+footer{border-top:1px solid var(--line);padding-block:30px 44px;
+  font-size:14px;color:var(--fg-dim)}
+footer p{margin:0 0 12px}
+.disclaim{font-size:13px;line-height:1.7;padding-top:14px;border-top:1px dashed var(--line)}
+@media (max-width:560px){
+  body{font-size:16px}
+  .kv{grid-template-columns:1fr;gap:0}
+  .kv .v{text-align:left}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hdr">
+    <a class="brand" href="https://www.4xs.dev"><b>4XS.DEV</b> / prototypes</a>
+    <span class="sp"></span>
+    <a class="btn" id="repo" href="https://github.com/kotyzap/YOLOv8-on-AXIS-ARTPEC-8-ACAP">GitHub</a>
+    <button class="btn" id="theme" type="button" aria-label="Toggle colour theme">Dark</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <figure class="hero" style="margin:28px 0 0">
+    <img src="hero.jpg" alt="An AXIS bullet camera beside an ARTPEC-8 chip, with a street scene showing detected people and vehicles.">
+    <figcaption class="figcap">Promotional illustration. Detection overlays shown are not real output — see the measured results below.</figcaption>
+  </figure>
+
+  <h1>YOLOv8 on AXIS</h1>
+  <p class="lede">Stock COCO YOLOv8n running on the camera's own DLPU. 80 classes, on real
+  hardware, no server, no cloud.</p>
+
+  <div class="badges">
+    <span class="badge proto">PROTOTYPE</span>
+    <span class="badge">ARTPEC-8</span>
+    <span class="badge">AXIS OS 12 / 13</span>
+    <span class="badge">ACAP Native SDK</span>
+    <span class="badge">AGPL-3.0</span>
+  </div>
+
+  <section>
+    <h2>01 / <b>What it is</b></h2>
+    <p>An ACAP that loads a quantized YOLOv8n into larod on an AXIS Q1656, decodes the detection
+    head on the camera's own CPU, draws bounding boxes on the live stream, and publishes
+    detections as a native Axis camera event that any VMS can subscribe to. Nothing leaves the
+    camera.</p>
+    <p>It is a weekend project — me teaching an Axis camera a new trick, and pushing the envelope
+    to find out where it breaks. Claude Code wrote most of the lines. The hardware, the domain
+    judgement and the debugging are mine.</p>
+    <p>The point is the pipeline, not the class list: an arbitrary detector, quantized, running on
+    the camera itself, with a settings UI and VMS events. Swapping in a model trained on something
+    you actually care about is the interesting direction.</p>
+  </section>
+
+  <section>
+    <h2>02 / <b>What actually got measured</b></h2>
+    <p>Numbers from the repo, not estimates. Inference figures are from the 640&times;640 model on
+    an AXIS Q1656.</p>
+    <div class="kv">
+      <div>Inference on <code>axis-a8-dlpu-tflite</code></div><div class="v">54 ms/frame</div>
+      <div>Whole graph on the DLPU, DFL head included</div><div class="v">yes</div>
+      <div>CPU decode + NMS, 8400 anchors &times; 80 classes</div><div class="v">14 ms</div>
+      <div>End-to-end, before pipelining</div><div class="v">~80 ms &rarr; ~12.5 fps</div>
+    </div>
+    <p>Decoding now runs on a worker thread — frame N is decoded while frame N+1 is on the DLPU —
+    so the loop is inference-bound. The cost is one frame of lag between video and overlay, which
+    is not visible at these rates.</p>
+  </section>
+
+  <section>
+    <h2>03 / <b>The aspect-ratio finding</b></h2>
+    <p>The result worth the weekend. larod's <code>convert</code> preprocessor scales the frame to
+    the model input <strong>without letterboxing</strong>, so a square model sees a 16:9 scene
+    squashed to about 56&nbsp;% of its width — nothing like the photographs COCO was trained on.</p>
+    <p>Re-exported at 384&times;640 and scored against the float32 PyTorch model, on 28 images held
+    out of both models' calibration sets, decoded exactly as the ACAP decodes:</p>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Frames cropped to 16:9 — what the camera actually delivers</caption>
+        <thead><tr><th>model</th><th>input</th><th>recall</th><th>false positives</th></tr></thead>
+        <tbody>
+          <tr><td>square</td><td class="num">640&times;640</td><td class="num">57.5 %</td><td class="num">19</td></tr>
+          <tr class="win"><td>rectangular</td><td class="num">384&times;640</td><td class="num">87.6 %</td><td class="num">11</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The same images uncropped — ordinary ~4:3 photos</caption>
+        <thead><tr><th>model</th><th>input</th><th>recall</th><th>false positives</th></tr></thead>
+        <tbody>
+          <tr class="win"><td>square</td><td class="num">640&times;640</td><td class="num">65.3 %</td><td class="num">16</td></tr>
+          <tr><td>rectangular</td><td class="num">384&times;640</td><td class="num">51.6 %</td><td class="num">9</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Thirty points of recall, in both directions, from nothing but aspect ratio. The lesson is
+    not that rectangular is better — it is that <strong>the model's aspect ratio has to match the
+    sensor's</strong>, and that getting it wrong costs more than most of the tuning anyone
+    bothers with. The rectangular model also uses 40&nbsp;% fewer input pixels.</p>
+  </section>
+
+  <section>
+    <h2>04 / <b>The quantization trap</b></h2>
+    <p>Worth knowing if you ever quantize a YOLOv8 yourself. Ultralytics' single
+    <code>output0</code> concatenates box coordinates, which range 0..~650, with class scores,
+    which range 0..1. Per-tensor int8 quantization then picks <strong>one scale for both</strong>,
+    around 2.54. Every class score below ~1.27 rounds to zero, and the exported model detects
+    nothing at all — silently, with no error anywhere.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Maximum class score on the same test image</caption>
+        <thead><tr><th>export</th><th>max score</th></tr></thead>
+        <tbody>
+          <tr><td>float32 reference</td><td class="num">0.665</td></tr>
+          <tr><td>single-output int8</td><td class="num">0.000</td></tr>
+          <tr class="win"><td>split-output int8</td><td class="num">0.625</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The fix is to cut the graph before the final <code>Concat</code> so boxes and scores become
+    two tensors with their own quantization scales. The ACAP tells them apart by byte size rather
+    than index, because larod does not guarantee output order.</p>
+  </section>
+
+  <section>
+    <h2>05 / <b>What this is not</b></h2>
+    <div class="note">
+      <strong>It takes the DLPU exclusively.</strong> The manifest declares
+      <code>deepLearningProcessor.required</code>, so AXIS Object Analytics must be stopped before
+      this app will start. You are trading AOA for this, not adding it.
+    </div>
+    <ul>
+      <li><strong>COCO is a photo dataset, not a surveillance dataset.</strong> It was trained on
+      hand-held pictures, not on a camera at 4&nbsp;m looking down a car park in the rain at
+      2&nbsp;a.m. AOA is trained for that and will beat this comfortably on the classes it covers.
+      The aspect-ratio numbers above show what a mismatch costs — and scene domain is a bigger
+      mismatch than aspect ratio.</li>
+      <li><strong>Most of the 80 classes are useless on a camera.</strong> COCO includes toaster,
+      hair drier and broccoli. Perhaps 15 of the 80 will ever fire meaningfully in a surveillance
+      scene.</li>
+      <li><strong>No tracking, no scenarios, no counting, no calibration.</strong> Detections are
+      per-frame. No line crossing, no time-in-area, no object identity across frames.</li>
+      <li><strong>The current model's speed is unmeasured.</strong> Only the 640&times;640 model
+      has been timed on hardware. The 384&times;640 one should be faster; that is a prediction.</li>
+      <li><strong>Tested on exactly one camera</strong> — an AXIS Q1656 on AXIS OS 12.11.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>06 / <b>Get it</b></h2>
+    <p>Needs Docker and the ACAP Native SDK image.</p>
+<pre><code>git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ARTPEC-8-ACAP
+cd YOLOv8-on-AXIS-ARTPEC-8-ACAP
+sh acap/build.sh
+
+curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" \
+  "http://CAMERA/axis-cgi/applications/upload.cgi"</code></pre>
+    <p>Re-export the model — different input size, different calibration set, your own weights —
+    with <code>sh tools/export_yolov8.sh</code>. The build refuses to run if the committed
+    quantization header and the model file have drifted apart.</p>
+    <p><a href="https://github.com/kotyzap/YOLOv8-on-AXIS-ARTPEC-8-ACAP">Read the code</a>. It
+    includes <code>improvements.md</code>, a full code review of this repo and what came of it.</p>
+  </section>
+
+  <section>
+    <h2>07 / <b>Licence</b></h2>
+    <p><strong>AGPL-3.0</strong>, and not as a stylistic choice: this repo ships a model derived
+    from Ultralytics YOLOv8, which is AGPL-3.0, and Ultralytics reads that as covering the whole
+    derivative work. To build something closed on top of this you need either an Ultralytics
+    Enterprise licence or a different model — several good detectors are Apache-2.0. I am not a
+    lawyer and this is not legal advice.</p>
+    <p>The ACAP skeleton derives from Axis's <code>object-detection-yolov5</code> example
+    (Apache-2.0), which is one-way compatible into AGPL-3.0.</p>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <p>Built by <a href="https://www.4xs.dev">Pavel Kotyza</a> —
+  <a href="mailto:kotyza@gmail.com">kotyza@gmail.com</a> &middot;
+  <a href="https://github.com/kotyzap">GitHub</a></p>
+  <p>A weekend hobby project: teaching Axis cameras a new trick, and pushing the envelope.
+  Claude Code wrote most of the lines.</p>
+  <p class="disclaim">
+    Not affiliated with, endorsed by or supported by Axis Communications AB.
+    Not affiliated with, endorsed by or supported by CamStreamer s.r.o.
+    AXIS, ARTPEC and AXIS Object Analytics are trademarks of Axis Communications AB;
+    CamStreamer, CamOverlay, CamSwitcher and CamScripter are trademarks of CamStreamer s.r.o.
+    Used here only to identify the hardware and software this project runs on.
+    This is a personal prototype, not a product. No warranty. Use at your own risk.
+  </p>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  function apply(t) {
+    root.setAttribute("data-theme", t);
+    btn.textContent = t === "dark" ? "Light" : "Dark";
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("yolo-axis-theme"); } catch (e) {}
+  apply(saved || "light");
+  btn.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    apply(next);
+    try { localStorage.setItem("yolo-axis-theme", next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

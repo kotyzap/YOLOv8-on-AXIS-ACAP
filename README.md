@@ -1,30 +1,98 @@
-# YOLOv8 on Axis (ARTPEC-8)
+# YOLOv8 on AXIS — ARTPEC-8 ACAP
 
-Stock COCO YOLOv8n running on an AXIS Q1656 (ARTPEC-8, AXIS OS 12.11, ACAP Native SDK 12.11.0).
-The DLPU runs the whole graph; the detection head is decoded on the CPU and drawn as bounding
-boxes on the stream. Detections are also published as a camera event, so any VMS that already
-consumes Axis events can subscribe without anything extra deployed.
+![status: prototype](https://img.shields.io/badge/status-PROTOTYPE-orange)
+![licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue)
+![hardware: ARTPEC-8](https://img.shields.io/badge/hardware-ARTPEC--8-informational)
+![AXIS OS 12/13](https://img.shields.io/badge/AXIS%20OS-12%20%2F%2013-informational)
 
-Test camera: 192.168.1.156
+**Stock COCO YOLOv8n running on the camera's own DLPU. 80 classes, no server, no cloud.**
+
+A functional edge prototype: an ACAP that loads a quantized YOLOv8n into larod on an AXIS Q1656,
+decodes the detection head on the camera's CPU, draws bounding boxes on the live stream, and
+publishes detections as a native Axis camera event that any VMS can subscribe to.
+
+This is a weekend project — me teaching an Axis camera a new trick, and pushing the envelope to
+find where it breaks. It is not a product and it is not supported. See
+[**What this is not**](#what-this-is-not) before you deploy it anywhere that matters.
+
+---
+
+## What actually got measured
+
+Everything below is a number from this repo, not an estimate.
+
+| | |
+|---|---|
+| Inference, 640x640 model, `axis-a8-dlpu-tflite` | **54 ms/frame** |
+| Whole graph on the DLPU | yes — including the DFL head |
+| CPU decode + NMS, 8400 anchors x 80 classes | 14 ms |
+| End-to-end, before pipelining | ~80 ms → ~12.5 fps |
+
+### The aspect-ratio finding
+
+The interesting result. larod's `convert` preprocessor scales the frame to the model input
+**without letterboxing**, so a square model sees a 16:9 scene squashed to about 56 % of its
+width — nothing like the photos COCO was trained on.
+
+Re-exported at 384x640 and scored against the float32 PyTorch model, on 28 images held out of
+both models' calibration sets, decoded exactly as the ACAP decodes:
+
+**Frames cropped to 16:9 — what the camera actually delivers:**
+
+| model | input | recall | false positives |
+|---|---|---|---|
+| square | 640x640 | 57.5 % | 19 |
+| **rectangular** | **384x640** | **87.6 %** | **11** |
+
+**The same images uncropped — ordinary ~4:3 photos:**
+
+| model | input | recall | false positives |
+|---|---|---|---|
+| **square** | **640x640** | **65.3 %** | 16 |
+| rectangular | 384x640 | 51.6 % | 9 |
+
+Thirty points of recall, in both directions, from nothing but aspect ratio. The lesson is not
+"rectangular is better" — it is that **the model's aspect ratio has to match the sensor's**, and
+that getting it wrong costs more than most of the tuning anyone bothers with. The rectangular
+model also uses 40 % fewer input pixels.
+
+### The quantization trap
+
+Worth knowing if you ever quantize a YOLOv8 yourself. Ultralytics' single `output0`
+(1 x 84 x anchors) concatenates box coordinates, which range 0..~650, with class scores, which
+range 0..1. Per-tensor int8 quantization picks **one scale for both**, around 2.54. Every class
+score below ~1.27 rounds to zero, and the exported model detects nothing at all — silently, with
+no error anywhere.
+
+The fix is to cut the graph before the final `Concat` so boxes and scores become two tensors with
+their own scales:
+
+| export | max class score on the same image |
+|---|---|
+| float32 reference | 0.665 |
+| single-output int8 | **0.000** |
+| split-output int8 | 0.625 |
+
+`model/MODEL.md` has the full tensor contract and the export recipe.
+
+---
 
 ## How it works
 
-VDO hands over frames at the native aspect ratio; larod's `convert` preprocessor scales them to
-the model input and the model runs on `axis-a8-dlpu-tflite`. The model input is **384x640**, not
-square, because that scaling step does not letterbox: a square model sees a 16:9 scene squashed
-to about 56 % of its width, which costs roughly 30 points of recall. `model/MODEL.md` has the
-measurements. The graph is cut before YOLOv8's
-final Concat, so boxes and scores arrive as two separate uint8 tensors with their own
-quantization scales — `model/MODEL.md` explains why that matters. The ACAP identifies the two by
-byte size rather than index, picks the best class per anchor by comparing raw quantized bytes,
-drops anchors below the confidence threshold and anchors covering more of the frame than
-`MaxAreaPercent`, and runs greedy per-class NMS over what survives.
+VDO delivers frames at the sensor's native aspect ratio. larod's `convert` preprocessor scales
+them to the model input, and the model runs on `axis-a8-dlpu-tflite`. The graph is cut before
+YOLOv8's final Concat, so boxes and scores arrive as two separate uint8 tensors — the ACAP tells
+them apart by byte size rather than index, because larod does not guarantee output order.
 
-Decode runs on a worker thread: frame N is decoded while frame N+1 is on the DLPU, so the loop
-is inference-bound. The cost is one frame of lag between the video and the overlay.
+Decoding runs on a worker thread: frame N is decoded while frame N+1 is on the DLPU, so the loop
+is inference-bound rather than inference-plus-decode. The cost is one frame of lag between the
+video and the overlay, which is not visible at these frame rates. The decode picks the best class
+per anchor by comparing raw quantized bytes, drops anchors below the confidence threshold and
+anchors covering more of the frame than `MaxAreaPercent`, and runs greedy per-class NMS over what
+survives.
 
-Every setting is an axparameter that the app watches, so saving in the settings page takes
-effect on the next frame — no restart, no model reload.
+Every setting is an axparameter the app watches, so saving in the settings page takes effect on
+the next frame — no restart, no model reload.
 
 ## Settings
 
@@ -33,66 +101,100 @@ effect on the next frame — no restart, no model reload.
 | `ConfThresholdPercent` | 25 | minimum class score, 1..100 |
 | `IouThresholdPercent` | 45 | NMS overlap threshold |
 | `MaxAreaPercent` | 90 | reject boxes covering more of the frame than this |
-| `Classes` | `person` | comma-separated label names; blank means all 80 |
+| `Classes` | `person` | comma-separated COCO label names; blank means all 80 |
 | `EventsEnabled` | yes | publish detections as a camera event |
 | `EventMinDurationMs` | 1000 | how long a class must be present before it is reported |
 | `EventCooldownMs` | 30000 | minimum gap between two events for the same class |
-| `LiveView` | 0 | nonce written by the settings page while it is open; gates `live.json` |
+| `LiveView` | 0 | nonce written by the settings page while it is open |
 
-`ConfThresholdPercent` has a floor of 1 % and NMS never compares more than 300 boxes, because at
-a zero threshold every one of the 8400 anchors survives and the O(n²) suppression would stall
-the app.
+`ConfThresholdPercent` has a floor of 1 % and NMS never compares more than 300 boxes: at a zero
+threshold every one of the anchors survives and the O(n²) suppression stalls the app.
 
-`LiveView` gates the `live.json` the settings page polls, so nothing is written to flash for a
-page nobody has open. The page writes a fresh number every 30 s while it is visible and 0 when
-it is hidden; the app arms for 60 s on any change. It is a changing number rather than a
-yes/no because re-writing a parameter with the value it already holds may not raise a change
-callback, which would let the window expire under an open page.
-
-The event is stateless, on
+The camera event is stateless, on
 `tnsaxis:CameraApplicationPlatform/tnsaxis:YOLOv8Detector/tnsaxis:Detection`, carrying `class`
-(string) and `confidence` (double).
+(string) and `confidence` (double). Any VMS that already consumes Axis events — AXIS Camera
+Station, Genetec, Milestone — can subscribe with nothing extra deployed.
 
 ## Build and deploy
 
+Needs Docker and the ACAP Native SDK image.
+
 ```sh
 sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_4_aarch64.eap
+
 curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" \
   "http://CAMERA/axis-cgi/applications/upload.cgi"
-curl --digest -u root:PASS "http://CAMERA/axis-cgi/applications/control.cgi?action=start&package=yolov8_detector"
+curl --digest -u root:PASS \
+  "http://CAMERA/axis-cgi/applications/control.cgi?action=start&package=yolov8_detector"
 ```
 
-`runMode` is `respawn`, so the app starts on its own and comes back after a camera reboot.
+`runMode` is `respawn`, so it starts on its own and survives a reboot.
 
-Two consequences. It will try to start even when AXIS Object Analytics holds the DLPU, and fail;
-`panic()` sleeps 5 s before exiting so that becomes a slow retry rather than a crash loop filling
-the system log, but the fix is still to stop AOA. And stopping the app from the Apps page is what
-keeps it stopped — it will not stay down just because it exited.
+To re-export the model — different input size, different calibration set, your own weights:
+
+```sh
+sh tools/export_yolov8.sh            # regenerates the .tflite and acap/app/model_params.h
+```
+
+`acap/build.sh` refuses to build if `model_params.h` and the model file have drifted apart.
 
 ## Layout
 
-- `tools/export_yolov8.sh` — model export, off-camera; also regenerates `model_params.h`
-- `tools/parameter_finder.py` — reads the model's quantization parameters into that header
-- `model/` — `.tflite`, `labels.txt`, `MODEL.md` (tensor contract, the quantization trap, the square-vs-rectangular measurements)
 - `acap/` — native ACAP sources, Dockerfile, build script
-- `verify/` — snapshots used to check box geometry
-- `improvements.md` — review notes and what is left
+- `model/` — the `.tflite`, labels, and `MODEL.md` (tensor contract, quantization trap, measurements)
+- `tools/` — model export and the quantization-parameter extractor
+- `verify/` — snapshots and an on-camera check script
+- `improvements.md` — a full code review of this repo and what came of it
 
-## Things that will bite
+## What this is not
 
-- **AXIS Object Analytics holds the DLPU.** The manifest declares
-  `deepLearningProcessor.required`, so AOA must be stopped before this app starts.
-- First start takes ~60 s while larod compiles the model for the DLPU. It is not hung.
-- Per-frame timings and per-object detections log at `LOG_DEBUG`. At `LOG_INFO` the app only
-  reports state changes; turn debug on when tuning, not in production.
-- `acap/app/model_params.h` is committed rather than generated on every build. `acap/build.sh`
-  refuses to build if it no longer matches the model's sha256 — re-run the export script.
-- The Docker base image is amd64; on Apple Silicon the build runs under emulation and warns
-  about the platform mismatch. That is expected and harmless.
+Read this part.
 
-## Attribution
+- **It takes the DLPU exclusively.** The manifest declares `deepLearningProcessor.required`, so
+  **AXIS Object Analytics must be stopped** before this app will start. You are trading AOA for
+  this, not adding it.
+- **COCO is a photo dataset, not a surveillance dataset.** It was trained on hand-held pictures,
+  not on a camera mounted at 4 m looking down a car park in the rain at 2 a.m. AOA is trained for
+  that and will beat this comfortably on the classes it covers. The aspect-ratio numbers above
+  are exactly how much a domain mismatch can cost — and scene domain is a bigger mismatch than
+  aspect ratio.
+- **Most of the 80 classes are useless on a camera.** COCO includes toaster, hair drier and
+  broccoli. Perhaps 15 of the 80 will ever fire meaningfully in a surveillance scene.
+- **No tracking, no scenarios, no counting, no calibration.** Detections are per-frame. There is
+  no line crossing, no time-in-area, no object ID across frames.
+- **Not performance-tuned on hardware for the current model.** The 384x640 model's inference time
+  on the camera has not been measured yet; only the 640x640 one has.
+- **Tested on exactly one camera**, an AXIS Q1656 on AXIS OS 12.11.
 
-Derived from Axis's `object-detection-yolov5` example (Apache 2.0). The decode path is rewritten
-for YOLOv8's channel-major, objectness-free, two-tensor output.
+The point of the project is the pipeline, not the COCO class list: an arbitrary detector,
+quantized, on the camera itself, with a settings UI and VMS events. Swapping in a model trained
+on something you actually care about is the interesting direction.
 
-Pavel Kotyza <kotyza@gmail.com>
+## Licence
+
+**AGPL-3.0.** Not a stylistic choice: this repo ships a model derived from Ultralytics YOLOv8,
+which is AGPL-3.0, and Ultralytics reads that as covering the whole derivative work. If you want
+to build something closed on top of this, you need either an Ultralytics Enterprise licence or a
+different model — several good detectors are Apache-2.0.
+
+I am not a lawyer and this paragraph is not legal advice.
+
+### Third-party
+
+- The ACAP skeleton is derived from Axis's `object-detection-yolov5` example, Apache-2.0. Those
+  files keep their Apache headers; `acap/app/LICENSE` is the Apache text. Apache-2.0 is one-way
+  compatible into AGPL-3.0, which is why the combined work can be AGPL-3.0.
+- The decode path, the threaded pipeline, the event sender, the settings page and the export
+  toolchain are mine.
+- `model/yolov8n_384x640_uint8.tflite` is stock COCO YOLOv8n, re-exported. AGPL-3.0, Ultralytics.
+
+## Credits
+
+Built by [Pavel Kotyza](https://www.4xs.dev) — weekend prototyping on Axis cameras.
+Claude Code wrote most of the lines; the domain judgement, the hardware and the debugging are mine.
+
+---
+
+*Not affiliated with, endorsed by or supported by Axis Communications AB.
+Not affiliated with, endorsed by or supported by CamStreamer s.r.o.
+A personal hobby project. Use at your own risk.*
