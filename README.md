@@ -134,6 +134,8 @@ the next frame — no restart, no model reload.
 | `IouThresholdPercent` | 45 | NMS overlap threshold |
 | `MaxAreaPercent` | 90 | reject boxes covering more of the frame than this |
 | `Classes` | `person` | comma-separated COCO label names; blank means all 80 |
+| `ViewArea` | 0 | which view to detect on; 0 is the sensor's full view |
+| `BoxColours` | `class` | `class` colours boxes by group, `single` draws them all red |
 | `EventsEnabled` | yes | publish detections as a camera event |
 | `EventMinDurationMs` | 1000 | how long a class must be present before it is reported |
 | `EventCooldownMs` | 30000 | minimum gap between two events for the same class |
@@ -147,6 +149,33 @@ The camera event is stateless, on
 (string) and `confidence` (double). Any VMS that already consumes Axis events — AXIS Camera
 Station, Genetec, Milestone — can subscribe with nothing extra deployed.
 
+## View areas
+
+`ViewArea` picks the view the detector runs on. The same number selects the VDO channel the
+frames come from **and** the bbox view the boxes are drawn on, so the picture and the detections
+cannot describe different crops. `0` keeps the sensor's full view.
+
+A view area is a crop, so the detector sees only that region — at better effective resolution,
+which is the point: a gate or a doorway fills the model input instead of occupying a tenth of it.
+AXIS Object Analytics always runs on the full view, so this is a genuine difference rather than a
+reimplementation.
+
+Verified on a Q1656 with two view areas: VAPIX view area 2 = VDO channel 2 = bbox view 2, and the
+settings page streams the same one. A `ViewArea` the camera does not have, or one that exists but
+will not stream, falls back to the full view with a warning rather than exiting — under
+`runMode: respawn` a fatal error there is a restart loop the settings page cannot reach.
+
+## Box colours
+
+`bbox` draws rectangles and no text, so colour is all a box can say about itself: person green,
+the eight vehicles blue, the ten animals purple, everything else amber. The settings page uses
+the same four on the class icons, the group headers and the live confidence bars, so a box on the
+video and a row in the list are tied by colour. `BoxColours=single` goes back to one red for
+anyone who finds that noisier than useful.
+
+Labels on the boxes would need `axoverlay` and a Cairo render per frame. Not built — the colours
+carry most of the same information for a fraction of the cost.
+
 ## Build and deploy
 
 Needs Docker and the ACAP Native SDK image.
@@ -154,9 +183,9 @@ Needs Docker and the ACAP Native SDK image.
 ```sh
 git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP
 cd YOLOv8-on-AXIS-ACAP
-sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_5_aarch64.eap
+sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_10_14_aarch64.eap
 
-curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_5_aarch64.eap" \
+curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_10_14_aarch64.eap" \
   "http://CAMERA/axis-cgi/applications/upload.cgi"
 curl --digest -u root:PASS \
   "http://CAMERA/axis-cgi/applications/control.cgi?action=start&package=yolov8_detector"
@@ -198,6 +227,10 @@ Read this part.
   no line crossing, no time-in-area, no object ID across frames.
 - **Not performance-tuned on hardware for the current model.** The 384x640 model's inference time
   on the camera has not been measured yet; only the 640x640 one has.
+- **Rotation 0 and 180 only.** Tested at 90: a quarter-turned stream is portrait, larod squashes
+  it into the landscape 384x640 input, and a standing person arrives as a smear — one frame found
+  nothing, the next called a person an airplane at 26 %. The app warns at 90/270. Fixing it means
+  a portrait export chosen at startup, not a coordinate change.
 - **Tested on exactly one camera**, an AXIS Q1656 on AXIS OS 12.11.
 
 The point of the project is the pipeline, not the COCO class list: an arbitrary detector,
