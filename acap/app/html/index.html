@@ -201,7 +201,10 @@
   }
   input[type=range] { width:100%; accent-color:var(--accent); }
   .val { font-size:15px; font-weight:700; color:var(--accent); }
-  .live { display:grid; grid-template-columns:minmax(0,560px) minmax(0,1fr); gap:18px; align-items:start; }
+  .fpsnow { margin-left:7px; color:var(--faint); font-size:11px; }
+  /* Two thirds picture, one third list. The picture was capped at 560 px, which
+     left the list most of a wide screen for a handful of short rows. */
+  .live { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:18px; align-items:start; }
   .shot { position:relative; background:#000; border-radius:10px; overflow:hidden; aspect-ratio:16/9; border:1px solid var(--line); }
   .shot img { width:100%; height:100%; object-fit:contain; display:block; }
   .shot .off {
@@ -952,7 +955,17 @@ async function poll() {
     const r = await fetch("live.json?t=" + Date.now(), { credentials: "same-origin", cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
-    document.getElementById("fps").textContent = (d.fps || 0).toFixed(1) + " fps";
+    // Mean leads; this frame's rate follows in muted type. One of them is the
+    // answer to "is it keeping up" and the other is only for chasing jitter, so
+    // they are not given equal weight.
+    const fpsEl = document.getElementById("fps");
+    fpsEl.textContent = (d.fps || 0).toFixed(1) + " fps";
+    if (typeof d.fps_now === "number") {
+      const now = document.createElement("span");
+      now.className = "fpsnow";
+      now.textContent = d.fps_now.toFixed(1) + " now";
+      fpsEl.appendChild(now);
+    }
 
     // Follow the view the app is actually on. A stream started on a stale or
     // unknown view (black box, "unavailable") is rebuilt on the right one.

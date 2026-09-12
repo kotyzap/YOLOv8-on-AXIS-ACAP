@@ -321,12 +321,18 @@ static void on_parameter_changed(const gchar* name, const gchar* value, gpointer
 
 // Writes the current detections to a small JSON file inside the package's html
 // directory, where the settings page can poll it. Only while the page says it is
-// watching, at most once a second, and never when the payload has not changed --
+// watching, at most once a second, and never when the detections have not changed --
 // this is flash, not a socket.
-static void live_write(const char* json, gint64 now, gint64 live_until_us) {
-    static gint64 last_us  = 0;
-    static char* last_json = NULL;
-    static int failed      = 0;
+//
+// "changed" is judged on `key`, the detections alone, not on the whole payload: the
+// frame rate fields move almost every frame, and comparing them would write at the
+// full rate on a scene where nothing is happening -- which is exactly what the
+// rate limit exists to prevent. The rate figures in a still scene's file are
+// therefore up to a few seconds stale; they are a diagnostic, not a reading.
+static void live_write(const char* json, const char* key, gint64 now, gint64 live_until_us) {
+    static gint64 last_us = 0;
+    static char* last_key = NULL;
+    static int failed     = 0;
 
     if (failed || now >= live_until_us) {
         return;
@@ -335,8 +341,8 @@ static void live_write(const char* json, gint64 now, gint64 live_until_us) {
     if (last_us != 0 && (now - last_us) / 1000 < LIVE_MIN_INTERVAL_MS) {
         return;
     }
-    if (last_json != NULL && strcmp(last_json, json) == 0) {
-        return;  // nothing changed; leave the flash alone
+    if (last_key != NULL && strcmp(last_key, key) == 0) {
+        return;  // same detections; leave the flash alone
     }
 
     GError* error = NULL;
@@ -351,8 +357,8 @@ static void live_write(const char* json, gint64 now, gint64 live_until_us) {
     }
 
     last_us = now;
-    g_free(last_json);
-    last_json = g_strdup(json);
+    g_free(last_key);
+    last_key = g_strdup(key);
 }
 
 // Draw on one view. bbox numbers views the way VAPIX does (view area 1 is the first),
@@ -926,6 +932,12 @@ int main(int argc, char** argv) {
     int have_results       = 0;
     gint64 last_frame_us   = 0;
     unsigned int period_ms = 0;
+    // Roughly the last second and a half at 10 fps: long enough to average out the
+    // governor's steps, short enough that the number still follows the scene.
+#define FPS_WINDOW 16
+    unsigned int fps_window[FPS_WINDOW] = {0};
+    int fps_next                        = 0;
+    int fps_filled                      = 0;
 
     while (running) {
         int status = 0;
@@ -956,6 +968,20 @@ int main(int argc, char** argv) {
         period_ms        = last_frame_us ? (unsigned int)((now - last_frame_us) / 1000) : 0;
         last_frame_us    = now;
 
+        // A single frame's gap is not a frame rate. The governor quantizes the stream
+        // to 30/25/20/15 fps, so consecutive periods sit either side of a step and a
+        // one-frame reading alternates between two values that are both real and
+        // neither useful. Average the last FPS_WINDOW periods for the number the page
+        // shows; the governor below still gets the instantaneous one, which is what it
+        // is tuned for.
+        if (period_ms) {
+            fps_window[fps_next] = period_ms;
+            fps_next             = (fps_next + 1) % FPS_WINDOW;
+            if (fps_filled < FPS_WINDOW) {
+                fps_filled++;
+            }
+        }
+
         // Runs on the DLPU. The worker is decoding the previous frame meanwhile.
         if (!model_run_inference(model_provider, vdo_buf)) {
             if (!img_util_flush(vdo_stream, &vdo_buf, &vdo_error)) {
@@ -974,14 +1000,23 @@ int main(int argc, char** argv) {
                 best_per_class[c] = 0.0f;
             }
 
+            GString* dets = g_string_new(NULL);   // detections only: the dedupe key
             GString* live = g_string_new(NULL);
+            // Mean over the window, not the last gap. Averaging the periods and
+            // inverting that is the honest way round: the mean of the rates would
+            // weight a short frame the same as a long one.
+            double fps_mean = 0.0;
+            if (fps_filled > 0) {
+                double sum = 0.0;
+                for (int f = 0; f < fps_filled; f++) {
+                    sum += fps_window[f];
+                }
+                const double mean_period = sum / fps_filled;
+                fps_mean                 = mean_period > 0.0 ? 1000.0 / mean_period : 0.0;
+            }
             // "view" is the view area the app actually runs on -- 0 for the full view --
             // which differs from the saved parameter after a fallback. The page streams
             // whatever this says, so the picture and the list come from one source.
-            g_string_append_printf(live,
-                                   "{\"fps\":%.1f, \"view\":%d, \"detections\":[",
-                                   period_ms ? 1000.0 / (double)period_ms : 0.0,
-                                   view_area);
             int live_count = 0;
             int shown      = 0;
 
@@ -1010,7 +1045,7 @@ int main(int argc, char** argv) {
 
                 if (live_count < 16) {
                     g_string_append_printf(
-                        live,
+                        dets,
                         "%s{\"label\":\"%s\",\"confidence\":%.2f,\"box\":[%.3f,%.3f,%.3f,%.3f]}",
                         live_count ? "," : "",
                         labels[detection_label[i]],
@@ -1040,8 +1075,17 @@ int main(int argc, char** argv) {
                 event_sender_update(event_sender, best_per_class, labels, num_labels);
             }
 
-            g_string_append(live, "]}");
-            live_write(live->str, now, settings.live_until_us);
+            // "fps" is the mean the page leads with; "fps_now" is this frame's gap,
+            // shown small beside it -- useful only when chasing jitter. Neither takes
+            // part in the change test above.
+            g_string_append_printf(live,
+                                   "{\"fps\":%.1f, \"fps_now\":%.1f, \"view\":%d, \"detections\":[%s]}",
+                                   fps_mean,
+                                   period_ms ? 1000.0 / (double)period_ms : 0.0,
+                                   view_area,
+                                   dets->str);
+            live_write(live->str, dets->str, now, settings.live_until_us);
+            g_string_free(dets, TRUE);
             g_string_free(live, TRUE);
         }
 
