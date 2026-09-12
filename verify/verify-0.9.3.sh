@@ -1,8 +1,18 @@
 #!/bin/sh
-# Verification pass for YOLOv8 Detector 0.9.3 on the Q1656.
-#   sh verify-0.9.3.sh
-CAM=${CAM:-192.168.1.156}
-AUTH=${AUTH:-root:CHANGEME}
+# Verification pass for YOLOv8 Detector on an ARTPEC-8 camera.
+#
+#   CAM=192.168.1.10 AUTH=root:yourpassword sh verify/verify-0.9.3.sh
+#
+# Checks the things that cannot be checked off the camera: that live.json is
+# only written while the settings page is watching, that the app is quiet at
+# LOG_INFO, and the running version and settings.
+set -u
+CAM=${CAM:-}
+AUTH=${AUTH:-}
+if [ -z "$CAM" ] || [ -z "$AUTH" ]; then
+    echo "usage: CAM=<camera-ip> AUTH=<user:password> sh $0" >&2
+    exit 2
+fi
 Q="curl -s --digest -u $AUTH"
 
 echo "=== 1. installed and running ==="

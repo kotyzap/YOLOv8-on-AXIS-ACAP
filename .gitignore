@@ -15,3 +15,9 @@ yolov8n.pt
 
 # Long-form write-up, still describing 0.9.1 — not part of the public repo
 marketing.md
+
+# Files the Claude desktop app drops into the folder
+Claude outputs/
+
+# Local push helper
+push.sh
