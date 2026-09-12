@@ -17,8 +17,15 @@ if [ "$want" != "$have" ]; then
     exit 1
 fi
 
-docker build -f acap/Dockerfile --build-arg ARCH=aarch64 -t yolov8_detector:arm64 .
+# Clear out earlier builds first. Leaving them here means acap/ shows a mix of
+# versions and the newest file is not obviously the current one.
 rm -rf acap/build-arm64
+rm -f acap/YOLOv8_Detector_*_aarch64.eap
+
+v=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' acap/app/manifest.json | head -1)
+echo "Building version $v from acap/app/manifest.json"
+
+docker build -f acap/Dockerfile --build-arg ARCH=aarch64 -t yolov8_detector:arm64 .
 docker cp "$(docker create yolov8_detector:arm64)":/opt/app/. acap/build-arm64
 find acap/build-arm64 -maxdepth 1 -name '*.eap' -exec cp {} acap/ \; -print
 echo "Done."
