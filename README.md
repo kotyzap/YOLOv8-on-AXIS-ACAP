@@ -11,6 +11,9 @@ A functional edge prototype: an ACAP that loads a quantized YOLOv8n into larod o
 decodes the detection head on the camera's CPU, draws bounding boxes on the live stream, and
 publishes detections as a native Axis camera event that any VMS can subscribe to.
 
+<img width="1600" height="893" alt="hero" src="https://github.com/user-attachments/assets/dd1ca48e-d12b-454c-88ce-4ffa7397803d" />
+
+
 This is a weekend project — me teaching an Axis camera a new trick, and pushing the envelope to
 find where it breaks. It is not a product and it is not supported. See
 [**What this is not**](#what-this-is-not) before you deploy it anywhere that matters.
