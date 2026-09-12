@@ -662,6 +662,21 @@ async function loadViewAreas(current) {
   sel.value = String(current || 0);
 }
 
+// The saved ViewArea and the one the app runs on differ after the app has fallen
+// back (a view area that was deleted, or a number this camera does not have). Say
+// so on the option itself, next to the value the user is looking at.
+function markFallback(actual) {
+  const sel = $("#viewarea");
+  const saved = parseInt((loaded && loaded.ViewArea) || "0", 10);
+  Array.from(sel.options).forEach((o) => {
+    o.textContent = o.textContent.replace(/ \u2014 not on this camera.*$/, "");
+    if (parseInt(o.value, 10) === saved && saved !== actual) {
+      o.textContent += " \u2014 not on this camera, running on " +
+                       (actual === 0 ? "the full view" : "view area " + actual);
+    }
+  });
+}
+
 document.querySelectorAll('input[type=range]').forEach((r) => {
   r.oninput = () => {
     r.closest(".field").querySelector("[data-out]").textContent = r.value;
@@ -778,6 +793,7 @@ $("#save").onclick = async () => {
       setStatus("Saved — restarting for the new view area…");
       await vapix("/axis-cgi/applications/control.cgi?action=restart&package=" + APP);
       loaded.ViewArea = viewArea;
+      liveView = null;  // the app's report is stale until it has restarted; trust the selection
       restartLive();
       setStatus("Saved — app restarted on view " + (viewArea === "0" ? "full" : viewArea), "ok");
     } else {
@@ -794,6 +810,8 @@ $("#save").onclick = async () => {
 let liveTimer = null;
 let armTimer = null;
 let liveWanted = true;
+let liveView = null;      // view the app reports in live.json; null until the first poll
+let streamedView = null;  // view the MJPEG <img> was started on
 
 // The app writes live.json to flash only while this is armed, so a page nobody
 // has open costs nothing. Re-armed well inside the app's 60 s window.
@@ -812,10 +830,12 @@ function startLive() {
   const shot = document.getElementById("shot");
   shot.textContent = "";
   const img = document.createElement("img");
-  // Stream the same view the detector runs on, or the camera's default when the
-  // app is on the full view. Otherwise the picture and the boxes describe
-  // different crops and every box looks misplaced.
-  const va = parseInt(($("#viewarea") && $("#viewarea").value) || "0", 10);
+  // Stream the view the app says it runs on (live.json "view"), falling back to the
+  // saved parameter before the first poll. After a fallback in the app these differ,
+  // and streaming the saved number gives a black box while the list keeps working.
+  const va = liveView !== null ? liveView
+           : parseInt(($("#viewarea") && $("#viewarea").value) || "0", 10);
+  streamedView = va;
   img.src = "/axis-cgi/mjpg/video.cgi?resolution=640x360&fps=5" +
             (va > 0 ? "&camera=" + va : "") + "&t=" + Date.now();
   img.onerror = () => {
@@ -860,6 +880,14 @@ async function poll() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     document.getElementById("fps").textContent = (d.fps || 0).toFixed(1) + " fps";
+
+    // Follow the view the app is actually on. A stream started on a stale or
+    // unknown view (black box, "unavailable") is rebuilt on the right one.
+    if (typeof d.view === "number") {
+      liveView = d.view;
+      if (streamedView !== null && streamedView !== liveView) restartLive();
+      markFallback(liveView);
+    }
     box.textContent = "";
 
     // The app filters by the SAVED classes. Until Save, the ticks in the sidebar are

@@ -945,9 +945,13 @@ int main(int argc, char** argv) {
             }
 
             GString* live = g_string_new(NULL);
+            // "view" is the view area the app actually runs on -- 0 for the full view --
+            // which differs from the saved parameter after a fallback. The page streams
+            // whatever this says, so the picture and the list come from one source.
             g_string_append_printf(live,
-                                   "{\"fps\":%.1f, \"detections\":[",
-                                   period_ms ? 1000.0 / (double)period_ms : 0.0);
+                                   "{\"fps\":%.1f, \"view\":%d, \"detections\":[",
+                                   period_ms ? 1000.0 / (double)period_ms : 0.0,
+                                   view_area);
             int live_count = 0;
             int shown      = 0;
 
