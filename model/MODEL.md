@@ -76,6 +76,18 @@ found correct.
 The 384x640 model has the same op set and 40 % fewer input pixels, so it should load the same way
 and run faster — **but that has not been measured on the camera yet.**
 
+## Camera rotation: 0 and 180 only (2026-09-12)
+
+Tested at rotation 90 on the Q1656. A quarter-turned stream is portrait (9:16), larod scales it
+into the landscape 384x640 input with no letterbox, and a standing person arrives as a wide flat
+smear. Detection largely fails: one frame reported nothing at all, the next called an obvious
+person `airplane` at 26 %. The boxes were not misplaced — there were no boxes.
+
+This is the same effect as the 4:3 table above, further along: whichever aspect matches wins. The
+fix would be a portrait export (640x384) chosen at startup from the rotation, with its own
+calibration and its own recall numbers — not a coordinate change. Until that exists the app logs
+a warning at 90/270 and the supported orientations are 0 and 180.
+
 ## Box geometry (2026-09-12, 384x640 model)
 
 Verified two ways. Off camera: the shipped TFLite, decoded exactly as the ACAP does (÷640, ÷384),
