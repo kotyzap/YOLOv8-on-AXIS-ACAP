@@ -272,6 +272,7 @@ typedef struct {
     float iou_threshold;
     float max_area;
     int events_enabled;
+    int colour_by_class;  // 0 draws every box red, as before
     gint64 live_until_us;  // stop writing live.json once the page goes quiet
     int class_allowed[NUM_CLASSES];
     char** labels;
@@ -297,6 +298,8 @@ static void on_parameter_changed(const gchar* name, const gchar* value, gpointer
         event_sender_set_timing(st->event_sender, number, -1);
     } else if (g_str_has_suffix(name, "EventCooldownMs")) {
         event_sender_set_timing(st->event_sender, -1, number);
+    } else if (g_str_has_suffix(name, "BoxColours")) {
+        st->colour_by_class = (g_ascii_strcasecmp(value, "class") == 0);
     } else if (g_str_has_suffix(name, "LiveView")) {
         // The settings page arms this while it is open and visible, and writes 0
         // when hidden. Without it the app writes nothing to flash.
@@ -362,13 +365,35 @@ static bbox_t* setup_bbox(unsigned int view) {
     }
 
     bbox_clear(bbox);
-    const bbox_color_t red = bbox_color_from_rgb(0xff, 0x00, 0x00);
 
     bbox_style_outline(bbox);
     bbox_thickness_thin(bbox);
-    bbox_color(bbox, red);
 
     return bbox;
+}
+
+// Box colour by what the class is, so a frame with people and cars reads without
+// labels -- bbox draws rectangles only, no text. The same four colours mark the
+// groups in the settings page's class list, which is the whole point: the colour
+// is the bond between the picture and the list.
+//
+// COCO order fixes the ranges: 0 person, 1..8 the vehicles, 14..23 the animals.
+// Everything else is one bucket; splitting it further would need a table, and
+// four colours is already as many as an operator can hold at a glance.
+static bbox_color_t class_colour(int class_index, int by_class) {
+    if (!by_class) {
+        return bbox_color_from_rgb(0xff, 0x00, 0x00);  // the original single red
+    }
+    if (class_index == 0) {
+        return bbox_color_from_rgb(0x22, 0xc5, 0x5e);  // people: green
+    }
+    if (class_index >= 1 && class_index <= 8) {
+        return bbox_color_from_rgb(0x3b, 0x82, 0xf6);  // vehicles: blue
+    }
+    if (class_index >= 14 && class_index <= 23) {
+        return bbox_color_from_rgb(0xa8, 0x55, 0xf7);  // animals: purple
+    }
+    return bbox_color_from_rgb(0xf9, 0x73, 0x16);      // everything else: amber
 }
 
 static float intersection_over_union(float x1,
@@ -708,6 +733,9 @@ int main(int argc, char** argv) {
     int event_min_duration_ms = ax_parameter_get_int(axparameter_handle, "EventMinDurationMs", 1000);
     int event_cooldown_ms     = ax_parameter_get_int(axparameter_handle, "EventCooldownMs", 30000);
     int view_area             = ax_parameter_get_int(axparameter_handle, "ViewArea", 0);
+    gchar* box_colours_str    = ax_parameter_get_str(axparameter_handle, "BoxColours", "class");
+    int colour_by_class       = (g_ascii_strcasecmp(box_colours_str, "class") == 0);
+    g_free(box_colours_str);
     g_free(events_enabled_str);
 
     event_sender_t* event_sender = NULL;
@@ -828,6 +856,7 @@ int main(int argc, char** argv) {
         .iou_threshold  = iou_threshold,
         .max_area       = max_area,
         .events_enabled = events_enabled,
+        .colour_by_class = colour_by_class,
         .live_until_us  = 0,
         .labels         = labels,
         .num_labels     = num_labels,
@@ -845,6 +874,7 @@ int main(int argc, char** argv) {
                                         "EventsEnabled",
                                         "EventMinDurationMs",
                                         "EventCooldownMs",
+                                        "BoxColours",
                                         "LiveView"};
     for (size_t i = 0; i < G_N_ELEMENTS(live_params); i++) {
         GError* cb_error = NULL;
@@ -998,6 +1028,7 @@ int main(int argc, char** argv) {
                 // A digital zoom on the camera, however, crops the *displayed* stream while
                 // the detector sees the full channel, so boxes drift under zoom.
                 bbox_coordinates_frame_normalized(bbox);
+                bbox_color(bbox, class_colour(detection_label[i], settings.colour_by_class));
                 bbox_rectangle(bbox, x1, y1, x2, y2);
             }
 
