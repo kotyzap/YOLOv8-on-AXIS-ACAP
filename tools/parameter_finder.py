@@ -9,7 +9,7 @@ guaranteed.
 The header records the model's sha256 so acap/build.sh can refuse to build a
 header and a model that have drifted apart.
 
-  python tools/parameter_finder.py model/yolov8n_640_int8.tflite [out.h]
+  python tools/parameter_finder.py model/yolov8n_384x640_uint8.tflite [out.h]
 
 Needs an interpreter: ai-edge-litert (small) or tensorflow (large).
 """

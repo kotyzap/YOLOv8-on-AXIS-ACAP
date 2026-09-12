@@ -1,31 +1,33 @@
 # YOLOv8 on Axis — code review and improvements
 
-> **Status, 2026-09-12.** Everything below is implemented and committed (`b879d1f`, app version
-> 0.9.2) except the two items that need work only you can run:
+> **Status, 2026-09-12 — everything below is implemented.** App version 0.9.4, model
+> `model/yolov8n_384x640_uint8.tflite`. The two items originally left open are done too:
 >
-> - **§2.1 / §2.2 rectangular export and real calibration set** — `tools/export_yolov8.sh` now
->   defaults to `384x640` with a few hundred calibration images, and the ACAP is already
->   dimension-agnostic, but the model itself has not been re-exported. The shipped
->   `model/yolov8n_640_int8.tflite` is still the square, 8-image-calibrated one.
-> - **§3.1 `runMode: never`** — still `never`; documented in the README as a deliberate choice
->   with the one-line change to `respawn` if you want it to survive a reboot. Please confirm
->   which you want.
+> - **§2.1 / §2.2 rectangular export and real calibration set.** 384x640 input, 5040 anchors,
+>   calibrated on 101 images instead of 8. On 16:9 frames held out of calibration it recovers
+>   87.6 % of the float32 model's detections where the square model managed 57.5 %, with fewer
+>   false positives. `model/MODEL.md` has both tables — including the 4:3 case, where the square
+>   model wins instead. The lesson is aspect match, not resolution.
+> - **§3.1 `runMode`.** Now `respawn`, with a 5 s backoff in `panic()` so a persistent failure
+>   (AOA holding the DLPU) degrades to a slow retry rather than a crash loop.
 >
-> Not verified on hardware: this session could reach neither Docker nor 192.168.1.156, so the
-> build and the camera test are yours to run. What *was* verified: both changed C files compile
-> clean under the project's `-Werror` flag set, and the rewritten decode produces detections
-> identical to an independent NumPy reference over the real model's output tensors across 12
+> **Found while implementing, not in the original review (fixed in 0.9.3).** A box whose centre
+> falls outside the frame clamps to `x1 > x2`, so `box_area_fraction` returned a *negative*
+> number. That passed the `> max_area` test, survived filtering, and reached `bbox_rectangle` as
+> an inverted rectangle. Present in 0.9.1 too. The area check now rejects `<= 0` as well.
+>
+> **How it was checked.** 0.9.3 ran on the Q1656: boxes correct, syslog quiet at `LOG_INFO`.
+> Off-camera: both changed C files compile clean under the project's `-Werror` set; the rewritten
+> decode matches an independent NumPy reference over the real model's output tensors across 12
 > threshold / IoU / area / class-filter combinations, including a saturated scene that exercises
-> the new 300-candidate NMS cap.
+> the 300-candidate NMS cap; and the decode pipeline runs 400 frames under ThreadSanitizer with
+> concurrent settings mutation, clean.
+>
+> **Still unmeasured:** the 384x640 model's inference time and fps on the camera. It has the same
+> op set as the square model and 40 % fewer input pixels, so it should be faster, but that is a
+> prediction, not a measurement.
 >
 > The original review follows, unchanged, as the record of why each change exists.
->
-> **Found while implementing (not in the original review), fixed in 0.9.3.** A box whose centre
-> falls outside the frame — `cx` reaches 657 px on a 640 px input — clamps to `x1 > x2`, so
-> `box_area_fraction` returns a *negative* number. That passed the `> max_area` test, survived
-> filtering, and reached `bbox_rectangle` as an inverted rectangle. Present in 0.9.1 too. The
-> area check now rejects anything `<= 0` as well. Caught by a ThreadSanitizer harness built
-> around the shipped pipeline code, which validates every published box.
 
 ---
 

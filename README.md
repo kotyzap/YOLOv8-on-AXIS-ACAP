@@ -10,7 +10,10 @@ Test camera: 192.168.1.156
 ## How it works
 
 VDO hands over frames at the native aspect ratio; larod's `convert` preprocessor scales them to
-the model input and the model runs on `axis-a8-dlpu-tflite`. The graph is cut before YOLOv8's
+the model input and the model runs on `axis-a8-dlpu-tflite`. The model input is **384x640**, not
+square, because that scaling step does not letterbox: a square model sees a 16:9 scene squashed
+to about 56 % of its width, which costs roughly 30 points of recall. `model/MODEL.md` has the
+measurements. The graph is cut before YOLOv8's
 final Concat, so boxes and scores arrive as two separate uint8 tensors with their own
 quantization scales — `model/MODEL.md` explains why that matters. The ACAP identifies the two by
 byte size rather than index, picks the best class per anchor by comparing raw quantized bytes,
@@ -70,7 +73,7 @@ keeps it stopped — it will not stay down just because it exited.
 
 - `tools/export_yolov8.sh` — model export, off-camera; also regenerates `model_params.h`
 - `tools/parameter_finder.py` — reads the model's quantization parameters into that header
-- `model/` — `.tflite`, `labels.txt`, `MODEL.md` (tensor contract + the quantization trap)
+- `model/` — `.tflite`, `labels.txt`, `MODEL.md` (tensor contract, the quantization trap, the square-vs-rectangular measurements)
 - `acap/` — native ACAP sources, Dockerfile, build script
 - `verify/` — snapshots used to check box geometry
 - `improvements.md` — review notes and what is left

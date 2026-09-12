@@ -7,13 +7,13 @@ cd "$(dirname "$0")/.."
 # acap/app/model_params.h is committed rather than regenerated on every build.
 # That is only safe while it still describes the committed model.
 want=$(sed -n 's/.*MODEL_SHA256 \([0-9a-f]\{64\}\).*/\1/p' acap/app/model_params.h | head -1)
-have=$(shasum -a 256 model/yolov8n_640_int8.tflite 2>/dev/null || sha256sum model/yolov8n_640_int8.tflite)
+have=$(shasum -a 256 model/yolov8n_384x640_uint8.tflite 2>/dev/null || sha256sum model/yolov8n_384x640_uint8.tflite)
 have=${have%% *}
 if [ "$want" != "$have" ]; then
-    echo "model_params.h describes a different model than model/yolov8n_640_int8.tflite." >&2
+    echo "model_params.h describes a different model than model/yolov8n_384x640_uint8.tflite." >&2
     echo "  header: $want" >&2
     echo "  model:  $have" >&2
-    echo "Re-run: python tools/parameter_finder.py model/yolov8n_640_int8.tflite" >&2
+    echo "Re-run: python tools/parameter_finder.py model/yolov8n_384x640_uint8.tflite" >&2
     exit 1
 fi
 
