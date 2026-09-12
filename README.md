@@ -195,6 +195,10 @@ Claude Code wrote most of the lines; the domain judgement, the hardware and the 
 
 ---
 
-*Not affiliated with, endorsed by or supported by Axis Communications AB.
-Not affiliated with, endorsed by or supported by CamStreamer s.r.o.
-A personal hobby project. Use at your own risk.*
+**My personal after-hours vibe coded [4XS.dev](https://www.4xs.dev) experiments are not products,
+and not affiliated with or endorsed by Axis Communications.**
+
+*Not affiliated with, endorsed by or supported by CamStreamer s.r.o. either. AXIS, ARTPEC and
+AXIS Object Analytics are trademarks of Axis Communications AB; CamStreamer, CamOverlay,
+CamSwitcher and CamScripter are trademarks of CamStreamer s.r.o. Used here only to identify the
+hardware and software this project runs on. No warranty. Use at your own risk.*
