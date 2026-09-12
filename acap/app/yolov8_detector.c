@@ -690,7 +690,16 @@ static VdoStream* create_new_vdo_stream(unsigned int channel,
 
     g_autoptr(VdoStream) vdo_stream = vdo_stream_new(vdo_settings, NULL, &error);
     if (!vdo_stream) {
-        panic("%s: Failed creating vdo stream: %s", __func__, error->message);
+        // Not fatal: a view area that exists as a channel but cannot be streamed --
+        // a disabled one, say -- would otherwise panic, and with runMode respawn that
+        // is a restart loop the settings page cannot reach. Let the caller retry on
+        // the full view.
+        syslog(LOG_WARNING,
+               "%s: cannot stream channel %u (%s)",
+               __func__,
+               channel,
+               error ? error->message : "unknown");
+        return NULL;
     }
 
     return g_steal_pointer(&vdo_stream);
@@ -771,7 +780,8 @@ int main(int argc, char** argv) {
     // runMode respawn, a panic here is a restart loop that the settings page cannot
     // reach, because the app it talks to is never up. Fall back to the full view and
     // say so, loudly enough to be found.
-    unsigned int vdo_channel = channel_util_get_first_input_channel();
+    const unsigned int full_view_channel = channel_util_get_first_input_channel();
+    unsigned int vdo_channel             = full_view_channel;
     if (view_area > 0) {
         if (channel_util_channel_exists((unsigned int)view_area)) {
             vdo_channel = (unsigned int)view_area;
@@ -793,6 +803,21 @@ int main(int argc, char** argv) {
 
     uint32_t rotation = channel_util_get_image_rotation(vdo_channel);
     syslog(LOG_INFO, "[Channel %u] Current global rotation is %u", vdo_channel, rotation);
+    if (rotation == 90 || rotation == 270) {
+        // Tested at 90 on the Q1656: the geometry is not the problem, detection is.
+        // A quarter-turned stream is portrait, larod squashes it into the landscape
+        // 384x640 model input, and a standing person arrives as a wide flat smear
+        // that stock COCO weights do not recognise -- one frame found nothing, the
+        // next called a person an airplane at 26 %. model/MODEL.md measured the same
+        // effect for a milder 4:3 mismatch: 87.6 % recall matched, 51.6 % mismatched.
+        //
+        // The fix is a portrait export selected at startup, not a coordinate change.
+        // Until that exists, say plainly that this orientation is not supported.
+        syslog(LOG_WARNING,
+               "Rotation %u is not supported: the model input is landscape, so a "
+               "portrait stream is squashed and detection largely fails. Use 0 or 180.",
+               rotation);
+    }
     VdoPair32u channel_ar = channel_util_get_aspect_ratio(vdo_channel);
     syslog(LOG_INFO,
            "[Channel %u] Current aspect ratio is %u:%u",
@@ -823,6 +848,32 @@ int main(int argc, char** argv) {
                                        vdo_stream_buffer_count,
                                        "crop",
                                        vdo_stream_framerate);
+    if (!vdo_stream && vdo_channel != full_view_channel) {
+        // The channel exists but will not stream -- a disabled view area is the
+        // likely case. Retry on the full view rather than exit into a respawn loop,
+        // and re-read the rotation and resolution, which belong to the channel.
+        syslog(LOG_WARNING,
+               "ViewArea %d cannot be streamed; falling back to the full view (channel %u)",
+               view_area,
+               full_view_channel);
+        vdo_channel = full_view_channel;
+        view_area   = 0;
+        rotation    = channel_util_get_image_rotation(vdo_channel);
+        chosen_req  = req_res;
+        if (!channel_util_choose_stream_resolution(vdo_channel,
+                                                   req_res,
+                                                   &chosen_req,
+                                                   rotation,
+                                                   &model_metadata.format)) {
+            panic("%s: Could not chose a resolution", __func__);
+        }
+        vdo_stream = create_new_vdo_stream(vdo_channel,
+                                           model_metadata.format,
+                                           chosen_req,
+                                           vdo_stream_buffer_count,
+                                           "crop",
+                                           vdo_stream_framerate);
+    }
     if (!vdo_stream) {
         return handle_vdo_failed(vdo_error);
     }
