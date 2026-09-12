@@ -117,6 +117,20 @@
     font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
   .grp .gcount { font-size:11px; color:var(--faint); }
+  /* Colour dot: the box colour this group draws in on the video. Not .chip --
+     that class is the preset buttons. */
+  .grp .gchip { width:8px; height:8px; border-radius:3px; flex:none; }
+  /* Segmented control in the gear panel; .chips there needs no sidebar padding. */
+  #colourmode { padding:0; }
+  #colourmode button {
+    font-size:12px; font-weight:500; padding:6px 11px; border-radius:6px;
+    border:1px solid var(--line); background:var(--surface);
+    color:var(--muted); cursor:pointer;
+  }
+  #colourmode button:hover { border-color:var(--accent); color:var(--accent); }
+  #colourmode button.on {
+    background:var(--accent-soft); border-color:var(--accent); color:var(--accent);
+  }
   /* The caret is a 12 px glyph but its own click target, so give it a real one. */
   .grp .caret {
     color:var(--faint); display:flex; align-items:center; justify-content:center;
@@ -292,6 +306,14 @@
         <select id="viewarea"></select>
         <span class="help">Which view the detector runs on. The boxes are drawn on the same view, so the picture and the detections cannot drift apart. A view area is a crop: the detector sees only that region, at better effective resolution. Changing this restarts the app.</span>
       </div>
+      <div class="field" id="f-colour">
+        <div class="row"><span style="font-weight:600;flex-grow:1">Box colours</span></div>
+        <div class="chips" id="colourmode">
+          <button type="button" data-mode="class">By class</button>
+          <button type="button" data-mode="single">One colour</button>
+        </div>
+        <span class="help">By class draws people green, vehicles blue, animals purple and everything else amber, matching the class list. One colour draws every box red, which is quieter when only one class is selected.</span>
+      </div>
       <div class="field" id="f-conf">
         <div class="row"><span style="font-weight:600;flex-grow:1">Confidence</span><span class="val"><span data-out>55</span>%</span></div>
         <input type="range" min="0" max="100" data-key="ConfThresholdPercent">
@@ -452,6 +474,31 @@ const ICONS = {
 };
 
 const COCO = GROUPS.reduce((a, g) => a.concat(g.items), []);
+
+// The four colours the app draws boxes in (class_colour() in yolov8_detector.c).
+// bbox draws rectangles without text, so colour is all a box can say about itself;
+// matching it here is what ties a box on the video to a row in this list. Keep the
+// two in step -- the ranges are COCO's: person, vehicles, animals, the rest.
+const CLASS_COLOURS = {
+  people:  "#22c55e",
+  veh:     "#3b82f6",
+  animals: "#a855f7",
+  other:   "#f97316"
+};
+const COLOUR_OF = {};
+GROUPS.forEach((g) => {
+  const c = CLASS_COLOURS[g.id] || CLASS_COLOURS.other;
+  g.items.forEach((n) => { COLOUR_OF[n] = c; });
+});
+const groupColour = (id) => colourMode === "class"
+  ? (CLASS_COLOURS[id] || CLASS_COLOURS.other) : SINGLE_COLOUR;
+// "class" or "single", mirroring the app's BoxColours parameter. In single mode the
+// app draws every box red, so the list drops the colour coding too -- a legend for
+// colours that are not on the video would be worse than none.
+const SINGLE_COLOUR = "#ef4444";
+let colourMode = "class";
+const classColour = (name) => colourMode === "class"
+  ? (COLOUR_OF[name] || CLASS_COLOURS.other) : SINGLE_COLOUR;
 const PRESETS = [
   { label: "People only", classes: ["people"] },
   { label: "Vehicles",    classes: ["veh"] },
@@ -512,6 +559,10 @@ function classRow(name) {
   const el = document.createElement("div");
   el.className = "cls" + (selected.has(name) ? " on" : "");
   el.innerHTML = '<span class="box"></span>' + iconSvg(name);
+  // The icon carries the box colour, so the eye can go straight from a box on the
+  // video to its row here. Only when selected: an unselected class draws nothing.
+  const ico = el.querySelector(".ico");
+  if (ico && selected.has(name)) ico.style.color = classColour(name);
   el.appendChild(document.createTextNode(name));
   el.onclick = () => {
     if (selected.has(name)) {
@@ -544,6 +595,11 @@ function drawClasses() {
     const nm = document.createElement("span");
     nm.className = "gname";
     nm.textContent = g.name;
+    // A colour chip on the header says which box colour this group draws in.
+    const chip = document.createElement("span");
+    chip.className = "gchip";
+    chip.style.background = groupColour(g.id);
+    head.appendChild(chip);
     const ct = document.createElement("span");
     ct.className = "gcount";
     ct.textContent = on + "/" + g.items.length;
@@ -624,6 +680,20 @@ $("#search").oninput = drawClasses;
 
 /* switches --------------------------------------------------------------- */
 $("#evon").onclick = () => { $("#evon").classList.toggle("on"); dirty(); };
+
+function drawColourMode() {
+  document.querySelectorAll("#colourmode button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.mode === colourMode);
+  });
+}
+document.querySelectorAll("#colourmode button").forEach((b) => {
+  b.onclick = () => {
+    colourMode = b.dataset.mode;
+    drawColourMode();
+    drawClasses();   // the icons carry the colour, so they have to be redrawn
+    dirty();
+  };
+});
 $("#viewarea").onchange = dirty;
 
 // View areas come from root.Image.I<n>.Enabled. VAPIX numbers the first one 1
@@ -721,6 +791,8 @@ async function load() {
     $("#dur").value = p.EventMinDurationMs || "1000";
     $("#cool").value = p.EventCooldownMs || "30000";
     $("#evon").classList.toggle("on", (p.EventsEnabled || "yes") === "yes");
+    colourMode = (p.BoxColours || "class").toLowerCase() === "single" ? "single" : "class";
+    drawColourMode();
     await loadViewAreas(parseInt(p.ViewArea || "0", 10));
 
     savedClasses = (p.Classes || "").trim();
@@ -782,6 +854,7 @@ $("#save").onclick = async () => {
     ["EventsEnabled", $("#evon").classList.contains("on") ? "yes" : "no"],
     ["EventMinDurationMs", $("#dur").value || "0"],
     ["EventCooldownMs", $("#cool").value || "0"],
+    ["BoxColours", colourMode],
     ["ViewArea", viewArea]
   ].map(([k, v]) => APP + "." + k + "=" + encodeURIComponent(v)).join("&");
 
@@ -922,6 +995,8 @@ async function poll() {
       bar.className = "bar";
       const fill = document.createElement("i");
       fill.style.width = Math.round(det.confidence * 100) + "%";
+      // Same colour as the box drawn for this detection on the video.
+      fill.style.background = classColour(det.label);
       bar.appendChild(fill);
       const pc = document.createElement("span");
       pc.className = "pc";

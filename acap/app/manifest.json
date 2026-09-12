@@ -28,7 +28,7 @@
             "runOptions": "/usr/local/packages/yolov8_detector/model/model.tflite /usr/local/packages/yolov8_detector/label/labels.txt -c axis-a8-dlpu-tflite",
             "vendorUrl": "https://www.4xs.dev",
             "runMode": "respawn",
-            "version": "0.10.6",
+            "version": "0.10.8",
             "compatibleOsVersions": [
                 {
                     "max": "13"
@@ -77,6 +77,11 @@
                     "name": "EventCooldownMs",
                     "default": "30000",
                     "type": "int:maxlen=6;min=0;max=600000"
+                },
+                {
+                    "name": "BoxColours",
+                    "default": "class",
+                    "type": "string:maxlen=8"
                 },
                 {
                     "name": "ViewArea",
