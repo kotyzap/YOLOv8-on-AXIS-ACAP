@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>YOLOv8 on AXIS — ARTPEC-8 ACAP prototype</title>
+<title>YOLOv8 on AXIS — ACAP prototype for ARTPEC</title>
 <meta name="description" content="Stock COCO YOLOv8n running on an AXIS camera's own DLPU. 80 classes, no server, no cloud. A weekend prototype by Pavel Kotyza / 4xs.dev.">
 <meta property="og:title" content="YOLOv8 on AXIS — ARTPEC-8 ACAP prototype">
 <meta property="og:description" content="Stock COCO YOLOv8n on the camera's own DLPU. 80 classes, no server, no cloud.">
@@ -104,7 +104,7 @@ footer p{margin:0 0 12px}
   <div class="wrap hdr">
     <a class="brand" href="https://www.4xs.dev"><b>4XS.DEV</b> / prototypes</a>
     <span class="sp"></span>
-    <a class="btn" id="repo" href="https://github.com/kotyzap/YOLOv8-on-AXIS-ARTPEC-8-ACAP">GitHub</a>
+    <a class="btn" id="repo" href="https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP">GitHub</a>
     <button class="btn" id="theme" type="button" aria-label="Toggle colour theme">Dark</button>
   </div>
 </header>
@@ -217,7 +217,30 @@ footer p{margin:0 0 12px}
   </section>
 
   <section>
-    <h2>05 / <b>What this is not</b></h2>
+    <h2>05 / <b>Which cameras</b></h2>
+    <p>The DLPU model format is not the same across Axis SoCs, so this does not travel as far as
+    it looks.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>SoC</th><th>DLPU model format</th><th>this repo</th></tr></thead>
+        <tbody>
+          <tr class="win"><td>ARTPEC-8</td><td>TFLite int8</td><td>verified — AXIS Q1656, AXIS OS 12.11</td></tr>
+          <tr><td>ARTPEC-9</td><td>TFLite int8</td><td>should work, untested</td></tr>
+          <tr><td>ARTPEC-7</td><td>TFLite int8</td><td>untested, probably too slow</td></tr>
+          <tr><td>CV25</td><td>Ambarella CVflow <code>.bin</code></td><td>no — different toolchain</td></tr>
+          <tr><td>CV75</td><td>proprietary, from ONNX</td><td>no</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>If the device named in <code>runOptions</code> is absent, the app enumerates what larod
+    does offer, picks a DLPU, logs the substitution and carries on — so an ARTPEC-9 product should
+    load the same <code>.tflite</code> without a rebuild. That path has never run on real
+    ARTPEC-9 hardware. CV25 and CV75 are a port, not a flag: they take a proprietary format
+    converted through Ambarella's toolchain.</p>
+  </section>
+
+  <section>
+    <h2>06 / <b>What this is not</b></h2>
     <div class="note">
       <strong>It takes the DLPU exclusively.</strong> The manifest declares
       <code>deepLearningProcessor.required</code>, so AXIS Object Analytics must be stopped before
@@ -241,10 +264,10 @@ footer p{margin:0 0 12px}
   </section>
 
   <section>
-    <h2>06 / <b>Get it</b></h2>
+    <h2>07 / <b>Get it</b></h2>
     <p>Needs Docker and the ACAP Native SDK image.</p>
-<pre><code>git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ARTPEC-8-ACAP
-cd YOLOv8-on-AXIS-ARTPEC-8-ACAP
+<pre><code>git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP
+cd YOLOv8-on-AXIS-ACAP
 sh acap/build.sh
 
 curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" \
@@ -252,12 +275,12 @@ curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" 
     <p>Re-export the model — different input size, different calibration set, your own weights —
     with <code>sh tools/export_yolov8.sh</code>. The build refuses to run if the committed
     quantization header and the model file have drifted apart.</p>
-    <p><a href="https://github.com/kotyzap/YOLOv8-on-AXIS-ARTPEC-8-ACAP">Read the code</a>. It
+    <p><a href="https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP">Read the code</a>. It
     includes <code>improvements.md</code>, a full code review of this repo and what came of it.</p>
   </section>
 
   <section>
-    <h2>07 / <b>Licence</b></h2>
+    <h2>08 / <b>Licence</b></h2>
     <p><strong>AGPL-3.0</strong>, and not as a stylistic choice: this repo ships a model derived
     from Ultralytics YOLOv8, which is AGPL-3.0, and Ultralytics reads that as covering the whole
     derivative work. To build something closed on top of this you need either an Ultralytics

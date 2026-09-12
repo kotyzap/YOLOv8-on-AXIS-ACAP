@@ -1,4 +1,4 @@
-# YOLOv8 on AXIS — ARTPEC-8 ACAP
+# YOLOv8 on AXIS — ACAP
 
 ![status: prototype](https://img.shields.io/badge/status-PROTOTYPE-orange)
 ![licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue)
@@ -76,6 +76,29 @@ their own scales:
 `model/MODEL.md` has the full tensor contract and the export recipe.
 
 ---
+
+## Which cameras
+
+The DLPU model format is not the same across Axis SoCs, so this does not travel as far as it
+looks.
+
+| SoC | DLPU model format | this repo |
+|---|---|---|
+| **ARTPEC-8** | TFLite int8 | **verified** — AXIS Q1656, AXIS OS 12.11 |
+| ARTPEC-9 | TFLite int8 | should work, untested — see below |
+| ARTPEC-7 | TFLite int8 | untested; a much weaker TPU/GPU, YOLOv8n at 384x640 is probably too heavy |
+| CV25 | proprietary Ambarella CVflow (`.bin`) | **no** — different artefact, different toolchain |
+| CV75 | proprietary, from ONNX | **no** |
+
+`runOptions` names `axis-a8-dlpu-tflite`. If that device is not present, the app now enumerates
+what larod does offer, picks a device whose name contains `dlpu`, logs the substitution and
+carries on — so an ARTPEC-9 product should load the same `.tflite` without a rebuild. That path
+has never run on real ARTPEC-9 hardware; if you have one, I would like to hear how it goes.
+
+CV25 and CV75 are not a configuration problem. They take a proprietary format converted through
+Ambarella's toolchain, so supporting them means a second model artefact and re-verifying that the
+split-output trick and the channel-major decode survive that conversion. Axis ships separate
+`object-detection-cv25` and `tensorflow-to-larod-cv25` examples for exactly this reason.
 
 ## How it works
 

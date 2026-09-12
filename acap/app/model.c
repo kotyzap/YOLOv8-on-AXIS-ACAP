@@ -256,23 +256,45 @@ create_inference_model(model_provider_t* provider, char* model_file, char* devic
         panic("%s: Unable to list devices: %s", __func__, error->msg);
     }
 
-    const char* device_str = NULL;
+    const char* device_str  = NULL;
+    const char* chosen_name = NULL;
+
     // Check for the supplied device name in all devices supported
     for (size_t i = 0; i < num_devices; ++i) {
         device_str = larodGetDeviceName(devices[i], &error);
-        if (!g_strcmp0(device_str, device_name)) {
+        if (device_name != NULL && !g_strcmp0(device_str, device_name)) {
             found_device = true;
+            chosen_name  = device_name;
             break;
         }
     }
 
     if (!found_device) {
-        panic("%s: No device found for %s", __func__, device_name);
+        // The device named in runOptions is not on this product. Rather than give
+        // up, take whatever DLPU this chip does offer: the same int8 TFLite runs
+        // on ARTPEC-7, -8 and -9, which name their larod devices differently.
+        // CV25 and CV75 will not be rescued by this -- they need a proprietary
+        // model format, so they would fail at load time instead.
+        syslog(LOG_WARNING,
+               "Device '%s' is not available; this product offers %zu:",
+               device_name ? device_name : "(none requested)",
+               num_devices);
+        for (size_t i = 0; i < num_devices; ++i) {
+            const char* name = larodGetDeviceName(devices[i], &error);
+            syslog(LOG_WARNING, "    %s", name ? name : "(unnamed)");
+            if (chosen_name == NULL && name != NULL && strstr(name, "dlpu") != NULL) {
+                chosen_name = g_strdup(name);
+            }
+        }
+        if (chosen_name == NULL) {
+            panic("%s: no DLPU device available on this product", __func__);
+        }
+        syslog(LOG_WARNING, "Falling back to '%s'", chosen_name);
     }
-    provider->device_name = device_name;
+    provider->device_name = chosen_name;
 
-    syslog(LOG_INFO, "Setting up larod connection with device %s", device_name);
-    const larodDevice* device = larodGetDevice(provider->conn, device_name, 0, &error);
+    syslog(LOG_INFO, "Setting up larod connection with device %s", chosen_name);
+    const larodDevice* device = larodGetDevice(provider->conn, chosen_name, 0, &error);
     syslog(LOG_INFO,
            "Loading the model... This might take up to 5 minutes depending on your device model.");
     larodModel* model = larodLoadModel(provider->conn,
@@ -308,7 +330,7 @@ create_inference_model(model_provider_t* provider, char* model_file, char* devic
         }
     }
     if (!model) {
-        panic("%s: Unable to load model with device %s: %s", __func__, device_str, error->msg);
+        panic("%s: Unable to load model with device %s: %s", __func__, chosen_name, error->msg);
     }
     syslog(LOG_INFO, "Model loaded successfully");
 
