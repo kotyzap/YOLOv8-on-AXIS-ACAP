@@ -352,8 +352,11 @@ static void live_write(const char* json, gint64 now, gint64 live_until_us) {
     last_json = g_strdup(json);
 }
 
-static bbox_t* setup_bbox(void) {
-    bbox_t* bbox = bbox_view_new(1u);
+// Draw on one view. bbox numbers views the way VAPIX does (view area 1 is the first),
+// so the ViewArea parameter maps straight through; 0 means "leave it to the app" and
+// draws on view 1, the full view on a camera with no view areas configured.
+static bbox_t* setup_bbox(unsigned int view) {
+    bbox_t* bbox = bbox_view_new((bbox_channel_t)(view ? view : 1u));
     if (!bbox) {
         panic("Failed to create box drawer");
     }
@@ -704,6 +707,7 @@ int main(int argc, char** argv) {
     int events_enabled        = (g_ascii_strcasecmp(events_enabled_str, "yes") == 0);
     int event_min_duration_ms = ax_parameter_get_int(axparameter_handle, "EventMinDurationMs", 1000);
     int event_cooldown_ms     = ax_parameter_get_int(axparameter_handle, "EventCooldownMs", 30000);
+    int view_area             = ax_parameter_get_int(axparameter_handle, "ViewArea", 0);
     g_free(events_enabled_str);
 
     event_sender_t* event_sender = NULL;
@@ -722,7 +726,35 @@ int main(int argc, char** argv) {
     model_metadata = model_provider_get_model_metadata(model_provider);
 
     double vdo_stream_framerate          = 30.0;
-    unsigned int vdo_channel             = channel_util_get_first_input_channel();
+    channel_util_log_channels();
+    // ViewArea 0 keeps the historical behaviour: detect on the first input channel,
+    // i.e. the sensor's full view. Any other value selects that view area as both the
+    // source of frames and the surface the boxes are drawn on, so the two cannot drift
+    // apart.
+    //
+    // A ViewArea that VDO does not know -- a view area deleted after it was chosen,
+    // or a number from a camera with different numbering -- must not be fatal: with
+    // runMode respawn, a panic here is a restart loop that the settings page cannot
+    // reach, because the app it talks to is never up. Fall back to the full view and
+    // say so, loudly enough to be found.
+    unsigned int vdo_channel = channel_util_get_first_input_channel();
+    if (view_area > 0) {
+        if (channel_util_channel_exists((unsigned int)view_area)) {
+            vdo_channel = (unsigned int)view_area;
+        } else {
+            syslog(LOG_WARNING,
+                   "Parameter ViewArea: %d is not a channel VDO knows about; "
+                   "detecting on the full view (channel %u) instead. "
+                   "Fix it in the settings page or clear it with param.cgi.",
+                   view_area,
+                   vdo_channel);
+            view_area = 0;
+        }
+    }
+    syslog(LOG_INFO,
+           "Parameter ViewArea: %d (detecting and drawing on VDO channel %u)",
+           view_area,
+           vdo_channel);
     unsigned int vdo_stream_buffer_count = 2;
 
     uint32_t rotation = channel_util_get_image_rotation(vdo_channel);
@@ -830,7 +862,7 @@ int main(int argc, char** argv) {
     }
     syslog(LOG_INFO, "Settings are applied live; saving does not restart the app");
 
-    bbox = setup_bbox();
+    bbox = setup_bbox(vdo_channel);
 
     if (!vdo_stream_start(vdo_stream, &vdo_error)) {
         return handle_vdo_failed(vdo_error);
@@ -956,7 +988,11 @@ int main(int argc, char** argv) {
                     live_count++;
                 }
 
-                // No need to compensate for rotation since bbox will handle this
+                // Frame-normalized space is aligned with the frame VDO delivers, rotation
+                // included: verified on the Q1656 at rotation 180 by comparing live.json
+                // against a snapshot with the overlay. No compensation is needed here.
+                // A digital zoom on the camera, however, crops the *displayed* stream while
+                // the detector sees the full channel, so boxes drift under zoom.
                 bbox_coordinates_frame_normalized(bbox);
                 bbox_rectangle(bbox, x1, y1, x2, y2);
             }
