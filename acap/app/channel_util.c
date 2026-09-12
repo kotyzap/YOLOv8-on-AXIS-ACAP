@@ -228,12 +228,19 @@ void channel_util_log_channels(void) {
     g_list_free_full(channels, g_object_unref);
 }
 
-// True when VDO knows a channel with this id. vdo_channel_get() on an unknown id
-// returns NULL rather than aborting, which makes it the right probe here: the
-// other helpers in this file panic on failure, and a panic on a bad ViewArea
-// would put the app in a respawn loop the settings page cannot get it out of.
+// True when VDO knows a channel with this id. vdo_channel_get() alone is not the
+// test: it hands back an object for any id and only fails later, when the object is
+// used -- on the Q1656, ViewArea=9 passed vdo_channel_get() and then died in
+// vdo_channel_get_info() with "Unknown object '/com/axis/Vdo1/Channels/9'". So ask
+// for the info, which is exactly the call the rest of startup makes first. The other
+// helpers here panic on that failure, and a panic on a bad ViewArea is a respawn
+// loop the settings page cannot get the app out of.
 bool channel_util_channel_exists(unsigned int channel_id) {
     g_autoptr(GError) error       = NULL;
     g_autoptr(VdoChannel) channel = vdo_channel_get(channel_id, &error);
-    return channel != NULL;
+    if (channel == NULL) {
+        return false;
+    }
+    g_autoptr(VdoMap) info = vdo_channel_get_info(channel, &error);
+    return info != NULL;
 }
