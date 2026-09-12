@@ -2,7 +2,7 @@
  * Committed on purpose: the model is committed too, so there is no reason for
  * every build to pull a 2 GB TensorFlow image to re-read four numbers.
  * Regenerate with tools/export_yolov8.sh, which runs the finder at the end.
- * acap/build.sh checks the model hash against MODEL_SHA256 below and refuses
+ * acap/build.sh checks the model hash against the digest below and refuses
  * to build if this header and the model have drifted apart.
  *
  * MODEL_SHA256 b1a8a805508d9380154f2cb11f002c72ac44debdaea799399a721366b0af7b26
