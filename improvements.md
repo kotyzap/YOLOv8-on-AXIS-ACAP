@@ -1,5 +1,27 @@
 # YOLOv8 on Axis — code review and improvements
 
+> **Status, 2026-09-12.** Everything below is implemented and committed (`b879d1f`, app version
+> 0.9.2) except the two items that need work only you can run:
+>
+> - **§2.1 / §2.2 rectangular export and real calibration set** — `tools/export_yolov8.sh` now
+>   defaults to `384x640` with a few hundred calibration images, and the ACAP is already
+>   dimension-agnostic, but the model itself has not been re-exported. The shipped
+>   `model/yolov8n_640_int8.tflite` is still the square, 8-image-calibrated one.
+> - **§3.1 `runMode: never`** — still `never`; documented in the README as a deliberate choice
+>   with the one-line change to `respawn` if you want it to survive a reboot. Please confirm
+>   which you want.
+>
+> Not verified on hardware: this session could reach neither Docker nor 192.168.1.156, so the
+> build and the camera test are yours to run. What *was* verified: both changed C files compile
+> clean under the project's `-Werror` flag set, and the rewritten decode produces detections
+> identical to an independent NumPy reference over the real model's output tensors across 12
+> threshold / IoU / area / class-filter combinations, including a saturated scene that exercises
+> the new 300-candidate NMS cap.
+>
+> The original review follows, unchanged, as the record of why each change exists.
+
+---
+
 Reviewed 2026-09-12 against `acap/app/*` (0.9.1), `acap/Dockerfile`, `acap/build.sh`, `tools/export_yolov8.sh`,
 `model/MODEL.md`, `acap/app/html/index.html`, `README.md`.
 
