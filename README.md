@@ -178,7 +178,10 @@ carry most of the same information for a fraction of the cost.
 
 ## Build and deploy
 
-Needs Docker and the ACAP Native SDK image.
+An unsigned `.eap` is attached to each [release](https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP/releases).
+It takes the DLPU exclusively, so **AXIS Object Analytics has to be stopped first**, and it has
+been run on exactly one camera model. Building it yourself needs Docker and the ACAP Native SDK
+image.
 
 ```sh
 git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP
