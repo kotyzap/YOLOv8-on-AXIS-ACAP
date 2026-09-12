@@ -190,3 +190,50 @@ VdoPair32u channel_util_get_aspect_ratio(unsigned int channel_id) {
     }
     return vdo_map_get_pair32u(info, "aspect_ratio", aspect_ratio_def);
 }
+
+// Log every channel VDO exposes: its id, aspect ratio and whatever info keys it
+// answers to. VDO channel ids, VAPIX camera numbers and bbox view numbers are
+// three different numberings whose relation is platform dependent (see
+// vdo-channel.h), so the app reports what this camera says instead of assuming.
+void channel_util_log_channels(void) {
+    g_autoptr(GError) error = NULL;
+    GList* channels         = vdo_channel_get_all(&error);
+    if (!channels) {
+        syslog(LOG_WARNING, "vdo_channel_get_all failed: %s", error ? error->message : "?");
+        return;
+    }
+    const char* keys[] = {"name", "type", "description", "input", "view", "source"};
+    for (GList* l = channels; l; l = l->next) {
+        VdoChannel* ch          = VDO_CHANNEL(l->data);
+        g_autoptr(GError) err   = NULL;
+        g_autoptr(VdoMap) info  = vdo_channel_get_info(ch, &err);
+        if (!info) {
+            continue;
+        }
+        VdoPair32u ar_def = {.w = 0u, .h = 0u};
+        VdoPair32u ar     = vdo_map_get_pair32u(info, "aspect_ratio", ar_def);
+        g_autoptr(GString) s = g_string_new("");
+        for (size_t i = 0; i < G_N_ELEMENTS(keys); i++) {
+            if (vdo_map_contains(info, keys[i])) {
+                g_string_append_printf(s, " %s=%s", keys[i], vdo_map_get_string(info, keys[i], NULL, "?"));
+            }
+        }
+        syslog(LOG_INFO,
+               "VDO channel id=%u aspect=%u:%u%s",
+               vdo_map_get_uint32(info, "id", 0),
+               ar.w,
+               ar.h,
+               s->str);
+    }
+    g_list_free_full(channels, g_object_unref);
+}
+
+// True when VDO knows a channel with this id. vdo_channel_get() on an unknown id
+// returns NULL rather than aborting, which makes it the right probe here: the
+// other helpers in this file panic on failure, and a panic on a bad ViewArea
+// would put the app in a respawn loop the settings page cannot get it out of.
+bool channel_util_channel_exists(unsigned int channel_id) {
+    g_autoptr(GError) error       = NULL;
+    g_autoptr(VdoChannel) channel = vdo_channel_get(channel_id, &error);
+    return channel != NULL;
+}

@@ -36,3 +36,5 @@ bool channel_util_choose_stream_resolution(unsigned int channel,
 unsigned int channel_util_get_image_rotation(unsigned int input_channel);
 unsigned int channel_util_get_first_input_channel(void);
 VdoPair32u channel_util_get_aspect_ratio(unsigned int channel_id);
+void channel_util_log_channels(void);
+bool channel_util_channel_exists(unsigned int channel_id);

@@ -75,3 +75,21 @@ found correct.
 
 The 384x640 model has the same op set and 40 % fewer input pixels, so it should load the same way
 and run faster — **but that has not been measured on the camera yet.**
+
+## Box geometry (2026-09-12, 384x640 model)
+
+Verified two ways. Off camera: the shipped TFLite, decoded exactly as the ACAP does (÷640, ÷384),
+matched against COCO ground truth on 90 people in coco128 cropped to 16:9 — mean centre offset
++0.005 / −0.018 of the frame, i.e. no bias. On camera: `live.json` compared against a JPEG
+snapshot carrying the overlay, rotation 180, zoom 1.00, on the full view and on view area 2 —
+raw decoded coordinates land on the subject in both axes.
+
+Two things that looked like decode bugs and were not:
+
+- **`bbox_coordinates_frame_normalized` needs no rotation compensation.** At rotation 180 the
+  frame VDO delivers and the frame bbox draws on are the same frame. Flipping y (or both axes)
+  "fixed" a centred subject and broke an off-centre one; only an off-centre subject can tell a
+  correct box from a mirrored one.
+- **Digital zoom misaligns the live view by design.** The detector sees the whole channel; a
+  zoomed display stream is a crop of it. Boxes then appear shrunk toward one corner. The zoom
+  readout in the camera UI is the tell — it must read 1.00 before judging alignment.

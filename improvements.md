@@ -1,5 +1,11 @@
 # YOLOv8 on Axis — code review and improvements
 
+> **Update, 2026-09-12 evening (0.10.4).** View area selection: `ViewArea` picks the VDO
+> channel and the bbox view together; verified on view area 2 of the Q1656. An unknown value
+> falls back to the full view with a warning instead of a respawn loop. Box geometry is
+> verified at rotation 180 and zoom 1.00 — the misalignment chased that evening was digital
+> zoom on the display stream, not the decode; `model/MODEL.md` § Box geometry has the details.
+>
 > **Status, 2026-09-12 — everything below is implemented.** App version 0.9.4, model
 > `model/yolov8n_384x640_uint8.tflite`. The two items originally left open are done too:
 >
