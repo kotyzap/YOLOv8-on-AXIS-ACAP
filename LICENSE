@@ -1,3 +1,34 @@
+YOLOv8 on AXIS - ACAP prototype
+Copyright (C) 2026 Pavel Kotyza <kotyza@gmail.com>
+https://www.4xs.dev
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/>.
+
+The licence is AGPL-3.0 rather than something permissive because this project
+ships a detection model derived from Ultralytics YOLOv8, which is AGPL-3.0.
+
+Portions of the ACAP are derived from Axis Communications AB's
+"object-detection-yolov5" example and remain under Apache-2.0; those files keep
+their original copyright headers. acap/app/LICENSE - the licence packaged inside
+the .eap - carries the full third-party notices.
+
+This is a personal prototype. It is NOT an Axis Communications product and is
+not affiliated with, endorsed by or supported by Axis Communications AB.
+
+The verbatim text of the GNU Affero General Public License v3.0 follows.
+
+================================================================================
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
