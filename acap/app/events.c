@@ -1,3 +1,15 @@
+/**
+ * YOLOv8 Detector for AXIS cameras
+ * Copyright (C) 2026 Pavel Kotyza <kotyza@gmail.com>
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version. See the LICENSE file that ships with this application.
+ *
+ * Not an Axis Communications product.
+ */
+
 #include "events.h"
 
 #include <axsdk/axevent.h>

@@ -1,18 +1,19 @@
 /**
- * Copyright (C) 2025, Axis Communications AB, Lund, Sweden
- * Copyright (C) 2026, Pavel Kotyza <kotyza@gmail.com>
+ * YOLOv8 Detector for AXIS cameras - main loop, decode and overlay.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Derived from the "object-detection-yolov5" example in
+ * AxisCommunications/acap-native-sdk-examples:
+ *     Copyright (C) 2025, Axis Communications AB, Lund, Sweden (Apache-2.0)
+ * Those portions remain under Apache-2.0.
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * The YOLOv8 decode path, the threaded pipeline, the live settings, the event
+ * sender and the live-view JSON are new:
+ *     Copyright (C) 2026 Pavel Kotyza <kotyza@gmail.com>
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * As part of this application the file is distributed under AGPL-3.0, because
+ * the application ships an Ultralytics YOLOv8-derived model. See LICENSE.
+ *
+ * Not an Axis Communications product.
  */
 
 /**

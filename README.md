@@ -209,9 +209,15 @@ I am not a lawyer and this paragraph is not legal advice.
 
 ### Third-party
 
-- The ACAP skeleton is derived from Axis's `object-detection-yolov5` example, Apache-2.0. Those
-  files keep their Apache headers; `acap/app/LICENSE` is the Apache text. Apache-2.0 is one-way
-  compatible into AGPL-3.0, which is why the combined work can be AGPL-3.0.
+- The ACAP skeleton is derived from Axis's `object-detection-yolov5` example, Apache-2.0. Files
+  that are still substantially Axis's keep their original Apache headers unchanged; files I
+  rewrote or added carry mine. Apache-2.0 is one-way compatible into AGPL-3.0, which is why the
+  combined work can be AGPL-3.0.
+- `acap/app/LICENSE` is the licence that ships inside the `.eap` and is shown in the camera's
+  Apps page. It leads with AGPL-3.0 and this application's copyright, then reproduces the
+  Apache-2.0 and Ultralytics notices. It previously still carried Axis's Apache header verbatim,
+  which made the app look like an Axis product on the camera — thanks to Christoph Acs for
+  catching that.
 - The decode path, the threaded pipeline, the event sender, the settings page and the export
   toolchain are mine.
 - `model/yolov8n_384x640_uint8.tflite` is stock COCO YOLOv8n, re-exported. AGPL-3.0, Ultralytics.
