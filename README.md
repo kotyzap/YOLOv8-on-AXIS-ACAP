@@ -148,9 +148,9 @@ Needs Docker and the ACAP Native SDK image.
 ```sh
 git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP
 cd YOLOv8-on-AXIS-ACAP
-sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_4_aarch64.eap
+sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_5_aarch64.eap
 
-curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" \
+curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_5_aarch64.eap" \
   "http://CAMERA/axis-cgi/applications/upload.cgi"
 curl --digest -u root:PASS \
   "http://CAMERA/axis-cgi/applications/control.cgi?action=start&package=yolov8_detector"

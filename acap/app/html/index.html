@@ -4,38 +4,49 @@
   Copyright (C) 2026 Pavel Kotyza <kotyza@gmail.com> - AGPL-3.0, see LICENSE
   Not an Axis Communications product.
 -->
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>YOLOv8 Detector</title>
 <style>
+  /* Palette from the 4XS.dev design system: deep teal ink, cyan accent, lime action.
+     Dark is the default here because that is how the design was drawn; flip the
+     apply() default in the script below if you prefer light. */
   :root {
-    --bg:#f4f4f1; --surface:#fff; --surface-2:#fafaf8;
-    --ink:#14171b; --muted:#5e646d; --faint:#8b919a;
-    --line:#e3e3de; --line-strong:#cfcfc8;
-    --accent:#0d6e7a; --accent-ink:#fff; --accent-soft:#e4f0f1;
+    --bg:#eef3f4; --surface:#fff; --surface-2:#f6f9fa;
+    --ink:#071a24; --muted:#4d626b; --faint:#7d9097;
+    --line:#d9e2e5; --line-strong:#b9c8cd;
+    --accent:#0f8f96; --accent-ink:#fff; --accent-soft:#dff4f5;
+    --lime:#7a9a00; --lime-ink:#fff;
     --warn:#8a6412; --warn-soft:#f6efdc; --stop:#a0382c;
   }
   [data-theme="dark"] {
-    --bg:#101216; --surface:#181b21; --surface-2:#1d2128;
-    --ink:#e9eaec; --muted:#9aa1ab; --faint:#6d747e;
-    --line:#282d35; --line-strong:#363c46;
-    --accent:#3ba7b5; --accent-ink:#08191c; --accent-soft:#15292d;
-    --warn:#d0a55a; --warn-soft:#2a2419; --stop:#d1685b;
+    --bg:#071a24; --surface:#0c2431; --surface-2:#03111a;
+    --ink:#e8f1f4; --muted:#9db4bd; --faint:#5b7581;
+    --line:#14303e; --line-strong:#22495b;
+    --accent:#2fe0e8; --accent-ink:#03111a; --accent-soft:#0d2f38;
+    --lime:#c9f31d; --lime-ink:#071a24;
+    --warn:#f0d58c; --warn-soft:#241f12; --stop:#ff6b6b;
   }
+  /* Space Grotesk and IBM Plex Mono are not loaded here: the camera serves this
+     page on networks with no internet, so a webfont link would simply hang.
+     These stacks are the closest system equivalents. */
   * { box-sizing:border-box; }
   body {
     margin:0; background:var(--bg); color:var(--ink);
     font:14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing:antialiased;
   }
-  .mono { font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .mono, .grp .gcount, .drow .pc, #fps, .val {
+    font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
   header {
     height:56px; background:var(--surface); border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:14px; padding:0 18px;
   }
   .brand { font-size:15px; font-weight:700; letter-spacing:-.01em; }
+  .brand em { font-style:normal; color:var(--lime); }
   .ver { font-size:11px; color:var(--faint); }
   .sep { width:1px; height:20px; background:var(--line); }
   .grow { flex-grow:1; }
@@ -53,10 +64,7 @@
   }
   .iconbtn:hover { border-color:var(--line-strong); color:var(--ink); }
   .iconbtn.on { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
-  main {
-    display:flex; align-items:stretch;
-    height:calc(100vh - 56px); overflow:hidden;  /* the class list scrolls, not the page */
-  }
+  main { display:flex; align-items:stretch; height:calc(100vh - 56px); overflow:hidden; }
   aside {
     width:258px; flex:none; background:var(--surface-2);
     border-right:1px solid var(--line); display:flex; flex-direction:column;
@@ -64,11 +72,10 @@
   }
   body.rail aside { width:52px; }
   body.rail aside .full { display:none; }
-  aside:not(.x) .railonly { display:none; }
-  body.rail aside .railonly { display:flex; }
   .lbl {
-    font-size:11px; font-weight:600; letter-spacing:.08em;
+    font-size:11px; font-weight:600; letter-spacing:.1em;
     text-transform:uppercase; color:var(--faint);
+    font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
   .pad { padding:14px 14px 10px; }
   input[type=search], input[type=number], input[type=text] {
@@ -83,7 +90,7 @@
     border:1px solid var(--line); background:var(--surface);
     color:var(--muted); cursor:pointer;
   }
-  .chip:hover { border-color:var(--line-strong); color:var(--ink); }
+  .chip:hover { border-color:var(--accent); color:var(--accent); }
   #classlist { flex-grow:1; overflow-y:auto; padding:0 8px 8px; }
   .cls {
     display:flex; align-items:center; gap:9px; padding:6px 8px;
@@ -101,13 +108,20 @@
     border:solid var(--accent-ink); border-width:0 2px 2px 0; transform:rotate(45deg);
   }
   .grp { display:flex; align-items:center; gap:8px; padding:9px 8px 5px; cursor:pointer; }
-  .grp .gname { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); flex-grow:1; }
-  .grp .gcount { font-size:11px; font-family:ui-monospace, Menlo, monospace; color:var(--faint); }
+  .grp .gname {
+    font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); flex-grow:1;
+    font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .grp .gcount { font-size:11px; color:var(--faint); }
   .grp .caret { color:var(--faint); display:flex; transition:transform .12s; }
   .grp.shut .caret { transform:rotate(-90deg); }
   .grp .box { width:14px; height:14px; }
   .grp.some .box { background:var(--accent); border-color:var(--accent); position:relative; }
-  .grp.some .box::after { content:""; display:block; width:7px; height:2px; margin:5px 0 0 2px; background:var(--accent-ink); border:0; transform:none; }
+  .grp.some .box::after {
+    content:""; display:block; width:7px; height:2px; margin:5px 0 0 2px;
+    background:var(--accent-ink); border:0; transform:none;
+  }
   .ghint { padding:0 8px 4px 31px; font-size:11px; color:var(--faint); }
   .asidefoot {
     padding:12px 14px; border-top:1px solid var(--line);
@@ -115,9 +129,9 @@
   }
   section.body { flex-grow:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
   .content { flex-grow:1; overflow-y:auto; padding:22px 26px; display:flex; flex-direction:column; gap:20px; }
-  h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.015em; }
+  h1 { margin:0; font-size:21px; font-weight:700; letter-spacing:-.02em; }
   p.sub { margin:0; font-size:13px; color:var(--muted); max-width:620px; }
-  .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; }
   .row { display:flex; align-items:center; gap:14px; }
   .field { display:flex; flex-direction:column; gap:6px; }
   .field .help { font-size:11.5px; color:var(--muted); }
@@ -127,25 +141,25 @@
     display:flex; align-items:center; padding:2px; cursor:pointer; transition:background .12s;
   }
   .sw i { width:16px; height:16px; border-radius:50%; background:var(--surface); transition:margin .12s; display:block; }
-  .sw.on { background:var(--accent); }
-  .sw.on i { margin-left:14px; background:#fff; }
+  .sw.on { background:var(--lime); }
+  .sw.on i { margin-left:14px; background:var(--surface); }
   footer {
     flex:none; border-top:1px solid var(--line); background:var(--surface);
     padding:13px 26px; display:flex; align-items:center; gap:16px;
   }
   button.primary {
-    font:600 13px/1 inherit; padding:10px 16px; border-radius:8px;
-    border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink); cursor:pointer;
+    font:700 13px/1 inherit; padding:10px 18px; border-radius:8px;
+    border:1px solid var(--lime); background:var(--lime); color:var(--lime-ink); cursor:pointer;
   }
-  button.primary[disabled] { opacity:.45; cursor:default; }
+  button.primary[disabled] { opacity:.4; cursor:default; }
   button.ghost {
     font:500 13px/1 inherit; padding:10px 14px; border-radius:8px;
-    border:1px solid var(--line-strong); background:var(--surface); color:var(--muted); cursor:pointer;
+    border:1px solid var(--line-strong); background:transparent; color:var(--muted); cursor:pointer;
   }
+  button.ghost:hover { color:var(--ink); border-color:var(--accent); }
   #status { font-size:12px; color:var(--muted); }
   #status.err { color:var(--stop); }
   #status.ok { color:var(--accent); }
-  /* gear drawer */
   #gear {
     width:340px; flex:none; background:var(--surface); border-left:1px solid var(--line);
     display:none; flex-direction:column;
@@ -156,13 +170,13 @@
     color:var(--warn); font-size:11.5px; line-height:1.5; border-top:1px solid var(--line);
   }
   input[type=range] { width:100%; accent-color:var(--accent); }
-  .val { font:600 15px/1 ui-monospace, Menlo, monospace; color:var(--accent); }
+  .val { font-size:15px; font-weight:700; color:var(--accent); }
   .live { display:grid; grid-template-columns:minmax(0,560px) minmax(0,1fr); gap:18px; align-items:start; }
-  .shot { position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; }
+  .shot { position:relative; background:#000; border-radius:10px; overflow:hidden; aspect-ratio:16/9; border:1px solid var(--line); }
   .shot img { width:100%; height:100%; object-fit:contain; display:block; }
   .shot .off {
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    color:#888; font-size:13px;
+    color:var(--faint); font-size:13px;
   }
   .det { display:flex; flex-direction:column; gap:6px; }
   .det .none { font-size:13px; color:var(--faint); padding:6px 0; }
@@ -180,8 +194,7 @@
     font-size:11.5px; line-height:1.5; color:var(--warn); background:var(--warn-soft);
     border-radius:7px; padding:8px 10px; margin-bottom:2px;
   }
-  .drow .pc { width:38px; text-align:right; font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--muted); }
-  #fps { font-family:ui-monospace, Menlo, monospace; }
+  .drow .pc { width:38px; text-align:right; font-size:12px; color:var(--muted); }
   @media (max-width:760px) {
     main { flex-direction:column; height:auto; overflow:visible; }
     aside, #gear { width:auto; border:0; border-bottom:1px solid var(--line); overflow:visible; }
@@ -193,7 +206,7 @@
 <body>
 
 <header>
-  <span class="brand">YOLOv8 Detector</span>
+  <span class="brand">YOLOv8 <em>on AXIS</em></span>
   <span class="ver mono" id="ver">—</span>
   <span class="sep"></span>
   <span class="pill" id="runstate"><span class="dot"></span><span id="runtext">checking…</span></span>
