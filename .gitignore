@@ -1,0 +1,14 @@
+# Build output
+acap/build-*/
+*.eap
+*_LICENSE.txt
+package.conf*
+param.conf
+
+# Export scratch
+calib.npy
+tf_split/
+*.onnx
+yolov8n.pt
+
+.DS_Store

@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YOLOv8 Detector</title>
+<style>
+  :root {
+    --bg:#f4f4f1; --surface:#fff; --surface-2:#fafaf8;
+    --ink:#14171b; --muted:#5e646d; --faint:#8b919a;
+    --line:#e3e3de; --line-strong:#cfcfc8;
+    --accent:#0d6e7a; --accent-ink:#fff; --accent-soft:#e4f0f1;
+    --warn:#8a6412; --warn-soft:#f6efdc; --stop:#a0382c;
+  }
+  [data-theme="dark"] {
+    --bg:#101216; --surface:#181b21; --surface-2:#1d2128;
+    --ink:#e9eaec; --muted:#9aa1ab; --faint:#6d747e;
+    --line:#282d35; --line-strong:#363c46;
+    --accent:#3ba7b5; --accent-ink:#08191c; --accent-soft:#15292d;
+    --warn:#d0a55a; --warn-soft:#2a2419; --stop:#d1685b;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono { font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  header {
+    height:56px; background:var(--surface); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:14px; padding:0 18px;
+  }
+  .brand { font-size:15px; font-weight:700; letter-spacing:-.01em; }
+  .ver { font-size:11px; color:var(--faint); }
+  .sep { width:1px; height:20px; background:var(--line); }
+  .grow { flex-grow:1; }
+  .pill {
+    display:flex; align-items:center; gap:7px; padding:4px 11px; border-radius:999px;
+    background:var(--accent-soft); border:1px solid var(--accent); color:var(--accent);
+    font-size:12px; font-weight:600;
+  }
+  .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .pill.off { background:transparent; border-color:var(--line-strong); color:var(--muted); }
+  .iconbtn {
+    width:32px; height:32px; border-radius:8px; border:1px solid var(--line);
+    background:var(--surface); color:var(--muted); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .iconbtn:hover { border-color:var(--line-strong); color:var(--ink); }
+  .iconbtn.on { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  main {
+    display:flex; align-items:stretch;
+    height:calc(100vh - 56px); overflow:hidden;  /* the class list scrolls, not the page */
+  }
+  aside {
+    width:258px; flex:none; background:var(--surface-2);
+    border-right:1px solid var(--line); display:flex; flex-direction:column;
+    min-height:0; overflow:hidden;
+  }
+  body.rail aside { width:52px; }
+  body.rail aside .full { display:none; }
+  aside:not(.x) .railonly { display:none; }
+  body.rail aside .railonly { display:flex; }
+  .lbl {
+    font-size:11px; font-weight:600; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--faint);
+  }
+  .pad { padding:14px 14px 10px; }
+  input[type=search], input[type=number], input[type=text] {
+    width:100%; height:32px; padding:0 10px; font-size:13px; font-family:inherit;
+    color:var(--ink); background:var(--surface);
+    border:1px solid var(--line); border-radius:8px;
+  }
+  input:focus { outline:2px solid var(--accent-soft); border-color:var(--accent); }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; padding:0 14px 10px; }
+  .chip {
+    font-size:12px; font-weight:500; padding:5px 10px; border-radius:6px;
+    border:1px solid var(--line); background:var(--surface);
+    color:var(--muted); cursor:pointer;
+  }
+  .chip:hover { border-color:var(--line-strong); color:var(--ink); }
+  #classlist { flex-grow:1; overflow-y:auto; padding:0 8px 8px; }
+  .cls {
+    display:flex; align-items:center; gap:9px; padding:6px 8px;
+    border-radius:7px; cursor:pointer; font-size:13px; color:var(--muted);
+  }
+  .cls:hover { background:var(--surface); }
+  .cls.on { background:var(--accent-soft); color:var(--ink); font-weight:500; }
+  .box {
+    width:15px; height:15px; flex:none; border-radius:4px;
+    border:1.5px solid var(--line-strong); background:var(--surface);
+  }
+  .cls.on .box { background:var(--accent); border-color:var(--accent); }
+  .cls.on .box::after {
+    content:""; display:block; width:4px; height:8px; margin:1px 0 0 4px;
+    border:solid var(--accent-ink); border-width:0 2px 2px 0; transform:rotate(45deg);
+  }
+  .grp { display:flex; align-items:center; gap:8px; padding:9px 8px 5px; cursor:pointer; }
+  .grp .gname { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); flex-grow:1; }
+  .grp .gcount { font-size:11px; font-family:ui-monospace, Menlo, monospace; color:var(--faint); }
+  .grp .caret { color:var(--faint); display:flex; transition:transform .12s; }
+  .grp.shut .caret { transform:rotate(-90deg); }
+  .grp .box { width:14px; height:14px; }
+  .grp.some .box { background:var(--accent); border-color:var(--accent); position:relative; }
+  .grp.some .box::after { content:""; display:block; width:7px; height:2px; margin:5px 0 0 2px; background:var(--accent-ink); border:0; transform:none; }
+  .ghint { padding:0 8px 4px 31px; font-size:11px; color:var(--faint); }
+  .asidefoot {
+    padding:12px 14px; border-top:1px solid var(--line);
+    background:var(--surface); font-size:12px; color:var(--muted);
+  }
+  section.body { flex-grow:1; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .content { flex-grow:1; overflow-y:auto; padding:22px 26px; display:flex; flex-direction:column; gap:20px; }
+  h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.015em; }
+  p.sub { margin:0; font-size:13px; color:var(--muted); max-width:620px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .row { display:flex; align-items:center; gap:14px; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field .help { font-size:11.5px; color:var(--muted); }
+  .grid2 { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; }
+  .sw {
+    width:34px; height:20px; flex:none; border-radius:10px; background:var(--line-strong);
+    display:flex; align-items:center; padding:2px; cursor:pointer; transition:background .12s;
+  }
+  .sw i { width:16px; height:16px; border-radius:50%; background:var(--surface); transition:margin .12s; display:block; }
+  .sw.on { background:var(--accent); }
+  .sw.on i { margin-left:14px; background:#fff; }
+  footer {
+    flex:none; border-top:1px solid var(--line); background:var(--surface);
+    padding:13px 26px; display:flex; align-items:center; gap:16px;
+  }
+  button.primary {
+    font:600 13px/1 inherit; padding:10px 16px; border-radius:8px;
+    border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink); cursor:pointer;
+  }
+  button.primary[disabled] { opacity:.45; cursor:default; }
+  button.ghost {
+    font:500 13px/1 inherit; padding:10px 14px; border-radius:8px;
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--muted); cursor:pointer;
+  }
+  #status { font-size:12px; color:var(--muted); }
+  #status.err { color:var(--stop); }
+  #status.ok { color:var(--accent); }
+  /* gear drawer */
+  #gear {
+    width:340px; flex:none; background:var(--surface); border-left:1px solid var(--line);
+    display:none; flex-direction:column;
+  }
+  body.gear #gear { display:flex; }
+  .note {
+    display:flex; gap:9px; padding:12px 16px; background:var(--warn-soft);
+    color:var(--warn); font-size:11.5px; line-height:1.5; border-top:1px solid var(--line);
+  }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .val { font:600 15px/1 ui-monospace, Menlo, monospace; color:var(--accent); }
+  .live { display:grid; grid-template-columns:minmax(0,560px) minmax(0,1fr); gap:18px; align-items:start; }
+  .shot { position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio:16/9; }
+  .shot img { width:100%; height:100%; object-fit:contain; display:block; }
+  .shot .off {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#888; font-size:13px;
+  }
+  .det { display:flex; flex-direction:column; gap:6px; }
+  .det .none { font-size:13px; color:var(--faint); padding:6px 0; }
+  .drow { display:flex; align-items:center; gap:10px; font-size:13px; }
+  .drow .nm { width:96px; flex:none; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar { flex-grow:1; height:6px; border-radius:3px; background:var(--line); overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .drow.dim .nm, .drow.dim .pc { color:var(--faint); }
+  .drow.dim .bar i { background:var(--line-strong); }
+  .drow .tag {
+    font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--warn); background:var(--warn-soft); padding:2px 5px; border-radius:4px;
+  }
+  #pending {
+    font-size:11.5px; line-height:1.5; color:var(--warn); background:var(--warn-soft);
+    border-radius:7px; padding:8px 10px; margin-bottom:2px;
+  }
+  .drow .pc { width:38px; text-align:right; font-family:ui-monospace, Menlo, monospace; font-size:12px; color:var(--muted); }
+  #fps { font-family:ui-monospace, Menlo, monospace; }
+  @media (max-width:760px) {
+    main { flex-direction:column; height:auto; overflow:visible; }
+    aside, #gear { width:auto; border:0; border-bottom:1px solid var(--line); overflow:visible; }
+    #classlist { max-height:300px; }
+    .live { grid-template-columns:minmax(0,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">YOLOv8 Detector</span>
+  <span class="ver mono" id="ver">—</span>
+  <span class="sep"></span>
+  <span class="pill" id="runstate"><span class="dot"></span><span id="runtext">checking…</span></span>
+  <span class="grow"></span>
+  <button class="iconbtn" id="themebtn" title="Light / dark">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+  <button class="iconbtn" id="gearbtn" title="Thresholds">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <aside>
+    <div class="pad row">
+      <span class="lbl grow full">Classes</span>
+      <button class="iconbtn" id="railbtn" title="Collapse">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path id="railpath" d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+    <div class="pad full" style="padding-top:0"><input type="search" id="search" placeholder="Filter 80 classes"></div>
+  <div class="chips full" id="presets"></div>
+    <div id="classlist" class="full"></div>
+    <div class="asidefoot full">
+      <strong id="clscount">—</strong>
+      Unselected classes are skipped before NMS, so they cost nothing and never reach an event.
+    </div>
+  </aside>
+
+  <section class="body">
+    <div class="content">
+      <div class="field">
+        <h1>Event output</h1>
+        <p class="sub">Detections stay on the camera until you send them somewhere. This build sends one camera event, which any VMS that already consumes Axis events can subscribe to.</p>
+      </div>
+
+      <div class="card field" style="gap:14px">
+        <div class="row">
+          <div class="sw" id="evon"><i></i></div>
+          <div class="field" style="gap:2px">
+            <strong style="font-size:14px">Camera event</strong>
+            <span class="help mono" id="topic">tnsaxis:CameraApplicationPlatform/YOLOv8Detector/Detection</span>
+          </div>
+        </div>
+        <div class="grid2">
+          <label class="field">
+            <span class="lbl">Minimum duration (ms)</span>
+            <input type="number" id="dur" min="0" max="600000" step="100">
+            <span class="help">How long a class must hold above the confidence threshold before it is worth reporting.</span>
+          </label>
+          <label class="field">
+            <span class="lbl">Cooldown (ms)</span>
+            <input type="number" id="cool" min="0" max="600000" step="1000">
+            <span class="help">Minimum gap between two events for the same class. Absence resets the hold.</span>
+          </label>
+        </div>
+        <div class="help">Event data: <span class="mono">class</span> (string), <span class="mono">confidence</span> (double).</div>
+      </div>
+
+      <div class="field">
+        <div class="row">
+          <span class="lbl grow">Live — what the detector sees right now</span>
+          <span class="help" id="fps">—</span>
+          <div class="sw on" id="liveon"><i></i></div>
+        </div>
+        <div class="live">
+          <div class="shot" id="shot"><div class="off">Live view paused</div></div>
+          <div class="det" id="dets"><div class="none">Waiting for the first frame…</div></div>
+        </div>
+        <span class="help">The boxes are drawn by the app itself, so the picture confirms both what
+        it recognised and where. The list is the same frame, decoded.</span>
+      </div>
+
+      <div class="help" style="color:var(--faint)">MQTT, webhooks and overlay output are not built yet — this page shows only what the app can actually do.</div>
+    </div>
+
+    <footer>
+      <span id="status">Loading…</span>
+      <span class="grow"></span>
+      <button class="ghost" id="reload">Revert</button>
+      <button class="primary" id="save">Save</button>
+    </footer>
+  </section>
+
+  <aside id="gear">
+    <div class="pad row"><span class="lbl grow">Thresholds</span></div>
+    <div style="padding:6px 16px 16px; display:flex; flex-direction:column; gap:22px; flex-grow:1">
+      <div class="field" id="f-conf">
+        <div class="row"><span style="font-weight:600;flex-grow:1">Confidence</span><span class="val"><span data-out>55</span>%</span></div>
+        <input type="range" min="0" max="100" data-key="ConfThresholdPercent">
+        <span class="help">Detections below this are discarded. Scores land on steps of about 4 points — the score tensor is 8-bit.</span>
+      </div>
+      <div class="field" id="f-iou">
+        <div class="row"><span style="font-weight:600;flex-grow:1">IoU</span><span class="val"><span data-out>45</span>%</span></div>
+        <input type="range" min="0" max="100" data-key="IouThresholdPercent">
+        <span class="help">How much two boxes may overlap before the weaker one is suppressed.</span>
+      </div>
+      <div class="field" id="f-area">
+        <div class="row"><span style="font-weight:600;flex-grow:1">Max area</span><span class="val"><span data-out>85</span>%</span></div>
+        <input type="range" min="0" max="100" data-key="MaxAreaPercent">
+        <span class="help">Drops boxes covering more of the frame than this. On close scenes the model emits a stable frame-filling box that overlap suppression cannot reach. 100 turns the filter off.</span>
+      </div>
+    </div>
+    <div class="note">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="flex:none;margin-top:1px"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+      <span>Reinstalling the app resets every value here to its default. Check this panel after each upload.</span>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const APP = "yolov8_detector";
+const GROUPS = [
+  { id: "people",  name: "People",            hint: "the one most deployments want",
+    items: ["person"] },
+  { id: "veh",     name: "Vehicles",          hint: "road, rail, air and water",
+    items: ["bicycle","car","motorcycle","bus","train","truck","boat","airplane"] },
+  { id: "animals", name: "Animals",           hint: "",
+    items: ["bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe"] },
+  { id: "street",  name: "Street furniture",  hint: "",
+    items: ["traffic light","fire hydrant","stop sign","parking meter","bench"] },
+  { id: "bags",    name: "Bags and carried items", hint: "unattended-luggage rules",
+    items: ["backpack","handbag","suitcase","umbrella","tie"] },
+  { id: "sport",   name: "Sports and leisure", hint: "", rare: true,
+    items: ["frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket"] },
+  { id: "indoor",  name: "Indoor and household", hint: "rarely useful on a camera", rare: true,
+    items: ["chair","couch","potted plant","bed","dining table","toilet","tv","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush","bottle","wine glass","cup","fork","knife","spoon","bowl"] },
+  { id: "food",    name: "Food", hint: "", rare: true,
+    items: ["banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake"] }
+];
+const COCO = GROUPS.reduce((a, g) => a.concat(g.items), []);
+const PRESETS = [
+  { label: "People only", classes: ["people"] },
+  { label: "Vehicles",    classes: ["veh"] },
+  { label: "People + vehicles", classes: ["people", "veh"] },
+  { label: "All 80",      classes: GROUPS.map((g) => g.id) }
+];
+
+const $ = (s) => document.querySelector(s);
+let selected = new Set();
+let loaded = null;
+let savedClasses = "";
+
+/* theme ------------------------------------------------------------------ */
+try {
+  const t = localStorage.getItem("yolov8-theme");
+  if (t) document.documentElement.dataset.theme = t;
+} catch (e) { /* private mode */ }
+$("#themebtn").onclick = () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("yolov8-theme", next); } catch (e) { /* ignore */ }
+};
+
+/* panels ----------------------------------------------------------------- */
+$("#gearbtn").onclick = () => {
+  document.body.classList.toggle("gear");
+  $("#gearbtn").classList.toggle("on");
+};
+$("#railbtn").onclick = () => {
+  const rail = document.body.classList.toggle("rail");
+  $("#railpath").setAttribute("d", rail ? "M9 18l6-6-6-6" : "M15 18l-6-6 6-6");
+};
+
+/* class list ------------------------------------------------------------- */
+const shut = new Set(GROUPS.filter((g) => g.rare).map((g) => g.id));
+
+function svgCaret() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("width", "12"); svg.setAttribute("height", "12");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor"); svg.setAttribute("stroke-width", "2.4");
+  svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", "M6 9l6 6 6-6");
+  svg.appendChild(path);
+  return svg;
+}
+
+function classRow(name) {
+  const el = document.createElement("div");
+  el.className = "cls" + (selected.has(name) ? " on" : "");
+  el.innerHTML = '<span class="box"></span>';
+  el.appendChild(document.createTextNode(name));
+  el.onclick = () => {
+    if (selected.has(name)) {
+      if (selected.size === 1) { warnEmpty(); return; }
+      selected.delete(name);
+    } else {
+      selected.add(name);
+    }
+    drawClasses(); dirty();
+  };
+  return el;
+}
+
+function drawClasses() {
+  const q = $("#search").value.trim().toLowerCase();
+  const list = $("#classlist");
+  list.textContent = "";
+
+  GROUPS.forEach((g) => {
+    const items = q ? g.items.filter((n) => n.indexOf(q) !== -1) : g.items;
+    if (items.length === 0) return;
+
+    const on = g.items.filter((n) => selected.has(n)).length;
+    const head = document.createElement("div");
+    head.className = "grp" + (on > 0 && on < g.items.length ? " some" : "") +
+                     (!q && shut.has(g.id) ? " shut" : "");
+    head.innerHTML = '<span class="box"></span>';
+    if (on === g.items.length) head.querySelector(".box").style.cssText =
+      "background:var(--accent);border-color:var(--accent)";
+    const nm = document.createElement("span");
+    nm.className = "gname";
+    nm.textContent = g.name;
+    const ct = document.createElement("span");
+    ct.className = "gcount";
+    ct.textContent = on + "/" + g.items.length;
+    const car = document.createElement("span");
+    car.className = "caret";
+    car.appendChild(svgCaret());
+    head.appendChild(nm); head.appendChild(ct); head.appendChild(car);
+
+    head.onclick = (ev) => {
+      if (ev.offsetX < 26) {                       // the checkbox toggles the whole group
+        if (on === g.items.length) {
+          if (selected.size === on) { warnEmpty(); return; }  // would clear everything
+          g.items.forEach((n) => selected.delete(n));
+        } else {
+          g.items.forEach((n) => selected.add(n));
+        }
+        dirty();
+      } else {                                     // anywhere else folds it
+        if (shut.has(g.id)) shut.delete(g.id); else shut.add(g.id);
+      }
+      drawClasses();
+    };
+    list.appendChild(head);
+
+    if (!q && shut.has(g.id)) return;
+    if (g.hint) {
+      const h = document.createElement("div");
+      h.className = "ghint";
+      h.textContent = g.hint;
+      list.appendChild(h);
+    }
+    items.forEach((n) => list.appendChild(classRow(n)));
+  });
+
+  $("#clscount").textContent = selected.size === COCO.length
+    ? "All 80 classes active."
+    : selected.size + " of 80 active.";
+}
+
+function warnEmpty() {
+  const f = $("#clscount");
+  f.textContent = "Keep at least one class — a detector with nothing selected does nothing.";
+  f.style.color = "var(--warn)";
+  setTimeout(() => { f.style.color = ""; drawClasses(); }, 2600);
+}
+
+function drawPresets() {
+  const bar = $("#presets");
+  bar.textContent = "";
+  PRESETS.forEach((p) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = p.label;
+    b.onclick = () => {
+      selected = new Set();
+      p.classes.forEach((gid) => {
+        const g = GROUPS.find((x) => x.id === gid);
+        if (g) g.items.forEach((n) => selected.add(n));
+      });
+      p.classes.forEach((gid) => shut.delete(gid));
+      drawClasses(); dirty();
+    };
+    bar.appendChild(b);
+  });
+}
+$("#search").oninput = drawClasses;
+
+/* switches --------------------------------------------------------------- */
+$("#evon").onclick = () => { $("#evon").classList.toggle("on"); dirty(); };
+
+document.querySelectorAll('input[type=range]').forEach((r) => {
+  r.oninput = () => {
+    r.closest(".field").querySelector("[data-out]").textContent = r.value;
+    dirty();
+  };
+});
+document.querySelectorAll('input[type=number]').forEach((n) => { n.oninput = dirty; });
+
+function setStatus(text, cls) {
+  const s = $("#status");
+  s.textContent = text;
+  s.className = cls || "";
+}
+function dirty() {
+  setStatus("Unsaved changes");
+  $("#save").disabled = false;
+}
+
+/* VAPIX ------------------------------------------------------------------ */
+async function vapix(url) {
+  const r = await fetch(url, { credentials: "same-origin" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.text();
+}
+
+async function load() {
+  setStatus("Loading…");
+  try {
+    const txt = await vapix("/axis-cgi/param.cgi?action=list&group=root." + APP);
+    const p = {};
+    txt.split(/\r?\n/).forEach((line) => {
+      const i = line.indexOf("=");
+      if (i < 0) return;
+      const key = line.slice(0, i).split(".").pop();
+      p[key] = line.slice(i + 1);
+    });
+    loaded = p;
+
+    setRange("ConfThresholdPercent", p.ConfThresholdPercent);
+    setRange("IouThresholdPercent", p.IouThresholdPercent);
+    setRange("MaxAreaPercent", p.MaxAreaPercent);
+    $("#dur").value = p.EventMinDurationMs || "1000";
+    $("#cool").value = p.EventCooldownMs || "30000";
+    $("#evon").classList.toggle("on", (p.EventsEnabled || "yes") === "yes");
+
+    savedClasses = (p.Classes || "").trim();
+    const names = savedClasses.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    // A blank parameter means every class; it is never an empty selection.
+    selected = new Set(names.length ? names : COCO);
+    drawClasses();
+
+    setStatus("Loaded", "ok");
+    $("#save").disabled = true;
+  } catch (e) {
+    setStatus("Could not read settings: " + e.message, "err");
+  }
+  status();
+}
+
+function setRange(key, value) {
+  const r = document.querySelector('input[data-key="' + key + '"]');
+  if (!r) return;
+  if (value !== undefined) r.value = value;
+  r.closest(".field").querySelector("[data-out]").textContent = r.value;
+}
+
+function rangeVal(key) {
+  return document.querySelector('input[data-key="' + key + '"]').value;
+}
+
+async function status() {
+  try {
+    const xml = await vapix("/axis-cgi/applications/list.cgi");
+    const m = new RegExp('Name="' + APP + '"[^>]*').exec(xml);
+    if (!m) { $("#runstate").classList.add("off"); $("#runtext").textContent = "not installed"; return; }
+    const v = /Version="([^"]+)"/.exec(m[0]);
+    const s = /Status="([^"]+)"/.exec(m[0]);
+    $("#ver").textContent = v ? v[1] : "";
+    const running = s && s[1] === "Running";
+    $("#runstate").classList.toggle("off", !running);
+    $("#runtext").textContent = running ? "Running" : (s ? s[1] : "unknown");
+  } catch (e) {
+    $("#runstate").classList.add("off");
+    $("#runtext").textContent = "unknown";
+  }
+}
+
+$("#reload").onclick = load;
+
+$("#save").onclick = async () => {
+  $("#save").disabled = true;
+  setStatus("Saving…");
+  const q = [
+    ["ConfThresholdPercent", rangeVal("ConfThresholdPercent")],
+    ["IouThresholdPercent", rangeVal("IouThresholdPercent")],
+    ["MaxAreaPercent", rangeVal("MaxAreaPercent")],
+    ["Classes", selected.size === COCO.length ? "" : Array.from(selected).join(",")],
+    ["EventsEnabled", $("#evon").classList.contains("on") ? "yes" : "no"],
+    ["EventMinDurationMs", $("#dur").value || "0"],
+    ["EventCooldownMs", $("#cool").value || "0"]
+  ].map(([k, v]) => APP + "." + k + "=" + encodeURIComponent(v)).join("&");
+
+  try {
+    const r = await vapix("/axis-cgi/param.cgi?action=update&" + q);
+    if (r.trim() !== "OK") throw new Error(r.trim().slice(0, 80));
+    // The app watches these parameters and picks them up on its next frame.
+    savedClasses = selected.size === COCO.length ? "" : Array.from(selected).join(",");
+    setStatus("Saved — applied live", "ok");
+    status();
+  } catch (e) {
+    setStatus("Save failed: " + e.message, "err");
+    $("#save").disabled = false;
+  }
+};
+
+/* live view ------------------------------------------------------------- */
+let liveTimer = null;
+let armTimer = null;
+let liveWanted = true;
+
+// The app writes live.json to flash only while this is armed, so a page nobody
+// has open costs nothing. Re-armed well inside the app's 60 s window.
+async function armLive(on) {
+  try {
+    await vapix("/axis-cgi/param.cgi?action=update&" + APP + ".LiveView=" + (on ? "yes" : "no"));
+  } catch (e) { /* the rest of the page works without the detection list */ }
+}
+
+function startLive() {
+  const shot = document.getElementById("shot");
+  shot.textContent = "";
+  const img = document.createElement("img");
+  img.src = "/axis-cgi/mjpg/video.cgi?resolution=640x360&fps=5&t=" + Date.now();
+  img.onerror = () => {
+    shot.textContent = "";
+    const d = document.createElement("div");
+    d.className = "off";
+    d.textContent = "Video stream unavailable";
+    shot.appendChild(d);
+  };
+  shot.appendChild(img);
+  armLive(true);
+  if (armTimer === null) armTimer = setInterval(() => armLive(true), 30000);
+  if (liveTimer === null) liveTimer = setInterval(poll, 1000);
+  poll();
+}
+
+function stopLive(msg) {
+  if (liveTimer !== null) { clearInterval(liveTimer); liveTimer = null; }
+  if (armTimer !== null) { clearInterval(armTimer); armTimer = null; }
+  armLive(false);
+  const shot = document.getElementById("shot");
+  shot.textContent = "";
+  const d = document.createElement("div");
+  d.className = "off";
+  d.textContent = msg || "Live view paused";
+  shot.appendChild(d);
+  document.getElementById("fps").textContent = "\u2014";
+}
+
+async function poll() {
+  const box = document.getElementById("dets");
+  try {
+    const r = await fetch("live.json?t=" + Date.now(), { credentials: "same-origin", cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    document.getElementById("fps").textContent = (d.fps || 0).toFixed(1) + " fps";
+    box.textContent = "";
+
+    // The app filters by the SAVED classes. Until Save, the ticks in the sidebar are
+    // a pending edit, so the list can legitimately show classes that look deselected.
+    const pendingList = selected.size === COCO.length
+      ? "" : Array.from(selected).sort().join(",");
+    const savedList = savedClasses.split(",").map((x) => x.trim()).filter(Boolean).sort().join(",");
+    if (pendingList !== savedList) {
+      const w = document.createElement("div");
+      w.id = "pending";
+      w.textContent = "Not saved yet — the app is still running with " +
+        (savedClasses === "" ? "all 80 classes" : savedClasses.split(",").join(", ")) +
+        ". Rows below that are not in your selection are greyed out.";
+      box.appendChild(w);
+    }
+
+    if (!d.detections || d.detections.length === 0) {
+      const n = document.createElement("div");
+      n.className = "none";
+      n.textContent = "Nothing detected in this frame.";
+      box.appendChild(n);
+      return;
+    }
+    d.detections.forEach((det) => {
+      const row = document.createElement("div");
+      const off = !selected.has(det.label);
+      row.className = "drow" + (off ? " dim" : "");
+      const nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = det.label;
+      const bar = document.createElement("span");
+      bar.className = "bar";
+      const fill = document.createElement("i");
+      fill.style.width = Math.round(det.confidence * 100) + "%";
+      bar.appendChild(fill);
+      const pc = document.createElement("span");
+      pc.className = "pc";
+      pc.textContent = Math.round(det.confidence * 100) + "%";
+      row.appendChild(nm); row.appendChild(bar); row.appendChild(pc);
+      if (off) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = "off";
+        row.appendChild(t);
+      }
+      box.appendChild(row);
+    });
+  } catch (e) {
+    box.textContent = "";
+    const n = document.createElement("div");
+    n.className = "none";
+    n.textContent = "No live data — is the app running?";
+    box.appendChild(n);
+    document.getElementById("fps").textContent = "—";
+  }
+}
+
+document.getElementById("liveon").onclick = () => {
+  liveWanted = document.getElementById("liveon").classList.toggle("on");
+  if (liveWanted) startLive(); else stopLive();
+};
+
+// A tab left open in the background should not keep the encoder streaming or the
+// app writing to flash.
+document.addEventListener("visibilitychange", () => {
+  if (!liveWanted) return;
+  if (document.hidden) stopLive("Live view paused \u2014 tab not visible");
+  else startLive();
+});
+window.addEventListener("pagehide", () => {
+  try {
+    fetch("/axis-cgi/param.cgi?action=update&" + APP + ".LiveView=no",
+          { credentials: "same-origin", keepalive: true });
+  } catch (e) { /* best effort on the way out */ }
+});
+
+drawPresets();
+drawClasses();
+load();
+startLive();
+</script>
+</body>
+</html>
