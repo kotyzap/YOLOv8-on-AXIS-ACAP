@@ -15,6 +15,9 @@ This is a weekend project — me teaching an Axis camera a new trick, and pushin
 find where it breaks. It is not a product and it is not supported. See
 [**What this is not**](#what-this-is-not) before you deploy it anywhere that matters.
 
+**[Read the write-up &rarr;](https://kotyzap.github.io/YOLOv8-on-AXIS-ACAP/)** — the measurements, the aspect-ratio finding and
+the quantization trap, with the tables.
+
 ---
 
 ## What actually got measured
@@ -143,6 +146,8 @@ Station, Genetec, Milestone — can subscribe with nothing extra deployed.
 Needs Docker and the ACAP Native SDK image.
 
 ```sh
+git clone https://github.com/kotyzap/YOLOv8-on-AXIS-ACAP
+cd YOLOv8-on-AXIS-ACAP
 sh acap/build.sh                     # -> acap/YOLOv8_Detector_0_9_4_aarch64.eap
 
 curl --digest -u root:PASS -F "packfil=@acap/YOLOv8_Detector_0_9_4_aarch64.eap" \
