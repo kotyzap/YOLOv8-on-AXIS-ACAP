@@ -296,7 +296,7 @@ footer p{margin:0 0 12px;max-width:none}
         <thead><tr><th>SoC</th><th>DLPU model format</th><th>this repo</th></tr></thead>
         <tbody>
           <tr class="win"><td>ARTPEC-8</td><td>TFLite int8</td><td>verified — AXIS Q1656, AXIS OS 12.11</td></tr>
-          <tr><td>ARTPEC-9</td><td>TFLite int8</td><td>should work, untested</td></tr>
+          <tr><td>ARTPEC-9</td><td>TFLite int8</td><td><strong>runs on ARTPEC-9 — first trial, with caveats</strong></td></tr>
           <tr><td>ARTPEC-7</td><td>TFLite int8</td><td>untested, probably too slow</td></tr>
           <tr><td>CV25</td><td>Ambarella CVflow <code>.bin</code></td><td>no — different toolchain</td></tr>
           <tr><td>CV75</td><td>proprietary, from ONNX</td><td>no</td></tr>
@@ -304,9 +304,18 @@ footer p{margin:0 0 12px;max-width:none}
       </table>
     </div>
     <p>If the device named in <code>runOptions</code> is absent, the app enumerates what larod does
-    offer, picks a DLPU, logs the substitution and carries on — so an ARTPEC-9 product should load
-    the same <code>.tflite</code> without a rebuild. That path has never run on real ARTPEC-9
-    hardware. CV25 and CV75 are a port, not a flag: they take a proprietary format converted
+    offer and picks a DLPU device whose name also contains <code>tflite</code>, logs the
+    substitution and carries on. The <code>tflite</code> part matters: an ARTPEC-9 product offers
+    both <code>a9-dlpu-native</code> and <code>a9-dlpu-tflite</code>, and taking the first name
+    containing <code>dlpu</code> picked the native one, which rejected the model outright.</p>
+    <p><strong>One evening on an AXIS Q6358.</strong> The same <code>.tflite</code> loads and
+    detects with no rebuild. It is slower — 5–10 fps against about 12.5 — and compiling the model
+    for the DLPU takes around 90 seconds. The first load after every start failed once and
+    succeeded on the retry, four times in a row, so the app now retries in place. And VDO numbers
+    its channels differently there: the overview is channel 1, with view areas from 2, so the view
+    area you pick on the settings page may not be the one you get. That last one is why this says
+    <em>runs</em> rather than <em>verified</em>.</p>
+    <p>CV25 and CV75 are a port, not a flag: they take a proprietary format converted
     through Ambarella's toolchain.</p>
   </section>
 
