@@ -31,6 +31,11 @@
 #include <unistd.h>
 
 #define MAX_NBR_POWER_RETRIES 50
+// Transient load failures are not the same thing as no power: on ARTPEC-9 the
+// first load after start fails once and then works. Three attempts is plenty --
+// if it fails that often the model is genuinely wrong for the device, and
+// retrying a 90 s compile forever helps nobody.
+#define MAX_NBR_LOAD_RETRIES 3
 
 static unsigned int elapsed_ms(struct timeval* start_ts, struct timeval* end_ts) {
     return (unsigned int)(((end_ts->tv_sec - start_ts->tv_sec) * 1000) +
@@ -276,16 +281,37 @@ create_inference_model(model_provider_t* provider, char* model_file, char* devic
         // on ARTPEC-7, -8 and -9, which name their larod devices differently.
         // CV25 and CV75 will not be rescued by this -- they need a proprietary
         // model format, so they would fail at load time instead.
+        //
+        // It must be a *TFLite* DLPU. ARTPEC-9 offers both 'a9-dlpu-native' and
+        // 'a9-dlpu-tflite', and "first name containing dlpu" picked the native one
+        // on a Q6358: larod rejected the model with "Incorrect model format" and,
+        // under runMode respawn, the app restarted every five seconds forever.
+        // Require "tflite" as well, and only settle for a bare dlpu device if this
+        // product offers no tflite one at all.
         syslog(LOG_WARNING,
                "Device '%s' is not available; this product offers %zu:",
                device_name ? device_name : "(none requested)",
                num_devices);
+        const char* dlpu_any = NULL;
         for (size_t i = 0; i < num_devices; ++i) {
             const char* name = larodGetDeviceName(devices[i], &error);
             syslog(LOG_WARNING, "    %s", name ? name : "(unnamed)");
-            if (chosen_name == NULL && name != NULL && strstr(name, "dlpu") != NULL) {
-                chosen_name = g_strdup(name);
+            if (name == NULL || strstr(name, "dlpu") == NULL) {
+                continue;
             }
+            if (strstr(name, "tflite") != NULL) {
+                if (chosen_name == NULL) {
+                    chosen_name = g_strdup(name);
+                }
+            } else if (dlpu_any == NULL) {
+                dlpu_any = name;
+            }
+        }
+        if (chosen_name == NULL && dlpu_any != NULL) {
+            syslog(LOG_WARNING,
+                   "No TFLite DLPU on this product; trying '%s', which may reject the model",
+                   dlpu_any);
+            chosen_name = g_strdup(dlpu_any);
         }
         if (chosen_name == NULL) {
             panic("%s: no DLPU device available on this product", __func__);
@@ -305,6 +331,33 @@ create_inference_model(model_provider_t* provider, char* model_file, char* devic
                                        "object_detection",
                                        NULL,
                                        &error);
+    // The first load after the app starts fails on ARTPEC-9 with
+    //   "Could not run warmup job: Failure when invoking interpreter"
+    // and the same call succeeds seconds later -- observed four times in a row on
+    // a Q6358, where compiling this graph for the DLPU takes about 90 s. runMode
+    // respawn hid it: the app died, restarted, and loaded on the second attempt.
+    // That is luck, not handling, and it costs a whole compile each time. Retry
+    // here instead, and keep the power-not-available case on its own counter
+    // below because it means something different.
+    uint8_t nbr_load_retries = 0;
+    while (!model && error != NULL && error->code != LAROD_ERROR_POWER_NOT_AVAILABLE &&
+           nbr_load_retries < MAX_NBR_LOAD_RETRIES) {
+        nbr_load_retries++;
+        syslog(LOG_WARNING,
+               "Model load failed (%s); retry %u of %u",
+               error->msg,
+               nbr_load_retries,
+               MAX_NBR_LOAD_RETRIES);
+        larodClearError(&error);
+        usleep(500 * 1000);
+        model = larodLoadModel(provider->conn,
+                               provider->larod_model_fd,
+                               device,
+                               LAROD_ACCESS_PRIVATE,
+                               "object_detection",
+                               NULL,
+                               &error);
+    }
     if (!model && error->code != LAROD_ERROR_POWER_NOT_AVAILABLE) {
         panic("%s: Unable to load model: %s", __func__, error->msg);
     }

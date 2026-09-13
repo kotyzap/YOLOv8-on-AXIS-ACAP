@@ -94,15 +94,39 @@ looks.
 | SoC | DLPU model format | this repo |
 |---|---|---|
 | **ARTPEC-8** | TFLite int8 | **verified** — AXIS Q1656, AXIS OS 12.11 |
-| ARTPEC-9 | TFLite int8 | should work, untested — see below |
+| ARTPEC-9 | TFLite int8 | **runs** — AXIS Q6358, first trial; slower and with caveats, see below |
 | ARTPEC-7 | TFLite int8 | untested; a much weaker TPU/GPU, YOLOv8n at 384x640 is probably too heavy |
 | CV25 | proprietary Ambarella CVflow (`.bin`) | **no** — different artefact, different toolchain |
 | CV75 | proprietary, from ONNX | **no** |
 
-`runOptions` names `axis-a8-dlpu-tflite`. If that device is not present, the app now enumerates
-what larod does offer, picks a device whose name contains `dlpu`, logs the substitution and
-carries on — so an ARTPEC-9 product should load the same `.tflite` without a rebuild. That path
-has never run on real ARTPEC-9 hardware; if you have one, I would like to hear how it goes.
+`runOptions` names `axis-a8-dlpu-tflite`. If that device is not present, the app enumerates what
+larod does offer and picks a DLPU device **whose name also contains `tflite`**, logs the
+substitution and carries on.
+
+That last detail matters: an ARTPEC-9 product offers both `a9-dlpu-native` and `a9-dlpu-tflite`,
+and an earlier version took the first name containing `dlpu` — the native one, which rejected the
+model with `Incorrect model format` and, under `runMode: respawn`, restarted every five seconds
+forever.
+
+### What an ARTPEC-9 run actually looked like
+
+One evening on an AXIS Q6358. Not a verification pass — a first trial, reported as such.
+
+- **It loads and detects.** Same `.tflite`, no rebuild, whole graph on `a9-dlpu-tflite`.
+- **Compiling the model takes ~90 s**, against ~60 s on the Q1656.
+- **The first load after every start fails** with `Could not run warmup job: Failure when invoking
+  interpreter`, and the next attempt succeeds. Observed four times in a row. The app now retries
+  in place rather than relying on `respawn` to paper over it.
+- **It is slower.** Mean analysis time 80–113 ms, so the framerate governor settled at 5–10 fps,
+  against ~12.5 fps on ARTPEC-8. Part of that is a larger stream (1024x576 vs 800x450); the rest
+  is unmeasured.
+- **VDO numbers channels differently.** The overview is channel 1, not 0, and view areas follow
+  from 2. `ViewArea` is passed straight through to VDO, so a view area chosen on the settings page
+  may not be the one you meant on this generation. Untested, and the reason ARTPEC-9 is "runs"
+  rather than "verified".
+- **Detection quality on a distant night scene was poor at a low threshold** — at confidence 7
+  with all 80 classes, most of COCO fired at once. At confidence 61 with five classes it was
+  sensible. That is the scene-domain point below, not an ARTPEC-9 problem.
 
 CV25 and CV75 are not a configuration problem. They take a proprietary format converted through
 Ambarella's toolchain, so supporting them means a second model artefact and re-verifying that the

@@ -28,7 +28,7 @@
             "runOptions": "/usr/local/packages/yolov8_detector/model/model.tflite /usr/local/packages/yolov8_detector/label/labels.txt -c axis-a8-dlpu-tflite",
             "vendorUrl": "https://www.4xs.dev",
             "runMode": "respawn",
-            "version": "0.10.14",
+            "version": "0.10.16",
             "compatibleOsVersions": [
                 {
                     "max": "13"
