@@ -94,7 +94,7 @@ looks.
 | SoC | DLPU model format | this repo |
 |---|---|---|
 | **ARTPEC-8** | TFLite int8 | **verified** — AXIS Q1656, AXIS OS 12.11 |
-| ARTPEC-9 | TFLite int8 | **runs** — AXIS Q6358, first trial; slower and with caveats, see below |
+| ARTPEC-9 | TFLite int8 | **runs on ARTPEC-9 — first trial**; slower, caveats below |
 | ARTPEC-7 | TFLite int8 | untested; a much weaker TPU/GPU, YOLOv8n at 384x640 is probably too heavy |
 | CV25 | proprietary Ambarella CVflow (`.bin`) | **no** — different artefact, different toolchain |
 | CV75 | proprietary, from ONNX | **no** |
